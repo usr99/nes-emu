@@ -27,7 +27,8 @@ pub struct MOS6502 {
 	accumulator: u8,
 	index_x: u8,
 	index_y: u8,
-	status: StatusFlags
+	status: StatusFlags,
+	memory: [u8; 0xFFFF]
 }
 
 impl MOS6502 {
@@ -38,20 +39,37 @@ impl MOS6502 {
 			accumulator: 0,
 			index_x: 0,
 			index_y: 0,			
-			status: StatusFlags::UNUSED
+			status: StatusFlags::UNUSED,
+			memory: [0; 0xFFFF]
 		}
 	}
 
-	pub fn interpret(&mut self, program: &[u8]) {
-		self.program_counter = 0;
+	fn mem_read(&self, addr: u16) -> u8 {
+		self.memory[addr as usize]
+	}
 
+	fn mem_write(&mut self, addr: u16, data: u8) {
+		self.memory[addr as usize] = data;
+	}	
+
+	pub fn load_and_run(&mut self, program: &[u8]) {
+		self.load(program);
+		self.run();
+	}
+
+	pub fn load(&mut self, program: &[u8]) {
+		self.memory[0x8000..(0x8000 + program.len())].copy_from_slice(program);
+		self.program_counter = 0x8000;
+	}
+
+	pub fn run(&mut self) {
 		loop {
-			let opcode = program[self.program_counter as usize];
+			let opcode = self.mem_read(self.program_counter);
 			self.program_counter += 1;
 
 			match opcode {
 				0xA9 => {
-					self.accumulator = program[self.program_counter as usize];
+					self.accumulator = self.mem_read(self.program_counter);
 					self.program_counter += 1;
 					self.status.update_zero_and_neg(self.accumulator);
 				},
@@ -77,7 +95,7 @@ mod test {
 	#[test]
 	fn lda_0xa9_immediate_load_data() {
 		let mut cpu = MOS6502::new();
-		cpu.interpret(&[0xa9, 0x05, 0x00]);
+		cpu.load_and_run(&[0xa9, 0x05, 0x00]);
 		assert_eq!(cpu.accumulator, 0x05);
 		assert!(!cpu.status.contains(StatusFlags::ZERO));
 		assert!(!cpu.status.contains(StatusFlags::NEGATIVE));
@@ -86,7 +104,7 @@ mod test {
 	#[test]
 	fn lda_0xa9_zero_flag() {
 		let mut cpu = MOS6502::new();
-		cpu.interpret(&[0xa9, 0x00, 0x00]);
+		cpu.load_and_run(&[0xa9, 0x00, 0x00]);
 		assert!(cpu.status.contains(StatusFlags::ZERO));
 	}
 
@@ -94,22 +112,22 @@ mod test {
 	fn tax_0xaa_move_a_to_x() {
 		let mut cpu = MOS6502::new();
 		cpu.accumulator = 10;
-		cpu.interpret(&[0xaa, 0x00]);
+		cpu.load_and_run(&[0xaa, 0x00]);
 		assert_eq!(cpu.index_x, 10);
 	}
 
 	#[test]
 	fn five_ops_working_together() {
 		let mut cpu = MOS6502::new();
-		cpu.interpret(&[0xa9, 0xc0, 0xaa, 0xe8, 0x00]);
+		cpu.load_and_run(&[0xa9, 0xc0, 0xaa, 0xe8, 0x00]);
 		assert_eq!(cpu.index_x, 0xc1);
 	}
  
-	 #[test]
+	#[test]
 	fn inx_overflow() {
 		let mut cpu = MOS6502::new();
 		cpu.index_x = 0xff;
-		cpu.interpret(&[0xe8, 0xe8, 0x00]);
+		cpu.load_and_run(&[0xe8, 0xe8, 0x00]);
 		assert_eq!(cpu.index_x, 1);
-	 }
+	}
 }
