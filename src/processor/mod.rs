@@ -73,6 +73,7 @@ impl MOS6502 {
 
 		loop {
 			let opcode = self.mem.read(self.reg.pc);
+			println!("[{:x}] = {:x}", self.reg.pc, opcode);
 			self.reg.pc += 1;
 
 			if opcode == 0x00 {
@@ -82,9 +83,10 @@ impl MOS6502 {
 			match ops.get(&opcode).copied() {
 				Some(Instruction(instr, mode, size)) => {
 					let op_impl = instructions::MOS6502_OP_IMPLS[instr as usize];
-					op_impl(&mut self.reg, &mut self.mem, mode);
-
-					self.reg.pc += (size - 1) as u16;
+					match op_impl(&mut self.reg, &mut self.mem, mode) {
+						Some(next_instr) => self.reg.pc = next_instr,
+						None => self.reg.pc += (size - 1) as u16
+					};
 				},
 				None => panic!("invalid op code {opcode}")
 			}
@@ -194,5 +196,22 @@ mod test {
 		cpu.mem.write(0x21, 0x42);
 		cpu.run();
 		assert_eq!(cpu.mem.read(0x21), 0x42 << 1);
-	}	
+	}
+
+	#[test]
+	fn bcc_noop() {
+		let mut cpu = MOS6502::new();
+		cpu.load(&[0x90, 0xff, 0xa9, 0x42, 0x00]);
+		cpu.reset();
+		cpu.reg.status |= StatusFlags::CARRY;
+		cpu.run();
+		assert_eq!(cpu.reg.acc, 0x42);
+	}
+
+	#[test]
+	fn bcc() {
+		let mut cpu = MOS6502::new();
+		cpu.load_and_run(&[0x90, 0x03, 0x00, 0x00, 0xa9, 0x42, 0x00]);
+		assert_eq!(cpu.reg.acc, 0x42);
+	}
 }

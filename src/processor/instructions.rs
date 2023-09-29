@@ -2,13 +2,14 @@ use std::collections::HashMap;
 
 use crate::memory::Memory;
 
-use super::{MOS6502, Registers};
+use super::{MOS6502, Registers, StatusFlags};
 
 #[repr(u8)]
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum Operation {
 	AND,
 	ASL,
+	BCC,
 	TAX,
 	LDA,
 	INX
@@ -32,7 +33,7 @@ pub enum AddressingMode {
 #[derive(Clone, Copy, Debug)]
 pub struct Instruction(pub Operation, pub AddressingMode, pub u8);
 
-static MOS6502_OP_CODES: [(u8, Instruction); 23] = [
+static MOS6502_OP_CODES: [(u8, Instruction); 24] = [
 	(0x29, Instruction(Operation::AND, AddressingMode::Immediate, 2)),
 	(0x25, Instruction(Operation::AND, AddressingMode::ZeroPage, 2)),
 	(0x35, Instruction(Operation::AND, AddressingMode::ZeroPageX, 2)),
@@ -46,6 +47,7 @@ static MOS6502_OP_CODES: [(u8, Instruction); 23] = [
 	(0x16, Instruction(Operation::ASL, AddressingMode::ZeroPageX, 2)),
 	(0x0e, Instruction(Operation::ASL, AddressingMode::Absolute, 3)),
 	(0x1e, Instruction(Operation::ASL, AddressingMode::AbsoluteY, 3)),
+	(0x90, Instruction(Operation::BCC, AddressingMode::None, 2)),
 	(0xaa, Instruction(Operation::TAX, AddressingMode::None, 1)),
 	(0xa9, Instruction(Operation::LDA, AddressingMode::Immediate, 2)),
 	(0xa5, Instruction(Operation::LDA, AddressingMode::ZeroPage, 2)),
@@ -62,18 +64,20 @@ pub fn alloc_opcode_map() -> HashMap<u8, Instruction> {
 	MOS6502_OP_CODES.into_iter().collect::<HashMap<_, _>>()
 }
 
-type OpImpl = fn(&mut Registers, &mut Memory, AddressingMode);
-pub(super) static MOS6502_OP_IMPLS: [OpImpl; 5] = [
-	and, asl, tax, lda, inx
+type OpImpl = fn(&mut Registers, &mut Memory, AddressingMode) -> Option<u16>;
+pub(super) static MOS6502_OP_IMPLS: [OpImpl; 6] = [
+	and, asl, bcc, tax, lda, inx
 ];
 
-fn and(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) {
+fn and(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
 	let addr = get_operand_addr(reg, mem, mode);
 	reg.acc &= mem.read(addr);
 	reg.status.update_zero_and_neg(reg.x);
+
+	None
 }
 
-fn asl(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) {
+fn asl(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
 	let old;
 	let new;
 
@@ -90,22 +94,37 @@ fn asl(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) {
 
 	reg.status.set(super::StatusFlags::CARRY, old & 0b1000_0000 != 0);
 	reg.status.update_zero_and_neg(new);
+
+	None
 }
 
-fn tax(reg: &mut Registers, _: &mut Memory, _: AddressingMode) {
+fn bcc(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
+	if reg.status.contains(StatusFlags::CARRY) {
+		return None;
+	}
+	Some(reg.pc + mem.read(reg.pc) as u16)
+}
+
+fn tax(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
 	reg.x = reg.acc;
 	reg.status.update_zero_and_neg(reg.x);
+
+	None
 }
 
-fn lda(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) {
+fn lda(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
 	let addr = get_operand_addr(reg, mem, mode);
 	reg.acc = mem.read(addr);
 	reg.status.update_zero_and_neg(reg.acc);
+
+	None
 }
 
-fn inx(reg: &mut Registers, _: &mut Memory, _: AddressingMode) {
+fn inx(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
 	reg.x = reg.x.wrapping_add(1);
 	reg.status.update_zero_and_neg(reg.x);
+
+	None
 }
 
 fn get_operand_addr(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> u16 {
