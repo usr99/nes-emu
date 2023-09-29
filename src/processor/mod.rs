@@ -138,4 +138,39 @@ mod test {
 		cpu.run();
 		assert_eq!(cpu.reg.x, 1);
 	}
+
+	#[test]
+	fn and_immediate() {
+		let mut cpu = MOS6502::new();
+		cpu.load(&[0x29, 0xe8, 0x00]);
+		cpu.reset();
+		cpu.reg.acc = 0xff;
+		cpu.run();
+		assert_eq!(cpu.reg.acc, 0xff & 0xe8);
+	}
+
+	#[test]
+	fn lda_and_zero_page_x() {
+		let mut cpu = MOS6502::new();
+		cpu.load(&[0xb5, 0x42, 0x35, 0x21, 0x00]);
+		cpu.reset();
+		cpu.reg.x = 0x05;
+		cpu.mem.write(0x42 + 0x05, 0x88);
+		cpu.mem.write(0x21 + 0x05, 0x72);
+		cpu.run();
+		assert_eq!(cpu.reg.acc, 0x88 & 0x72);
+	}
+
+	#[test]
+	fn and_indirect_y() {
+		let mut cpu = MOS6502::new();
+		cpu.load(&[0x31, 0x42, 0x00]);
+		cpu.reset();
+		cpu.reg.acc = 0xAD;
+		cpu.reg.y = 0x12;
+		cpu.mem.write_u16(0x42, 0x7777);
+		cpu.mem.write_u16(0x7777 + 0x12, 0xBE);
+		cpu.run();
+		assert_eq!(cpu.reg.acc, 0xAD & 0xBE);
+	}	
 }

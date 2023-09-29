@@ -7,6 +7,7 @@ use super::{MOS6502, Registers};
 #[repr(u8)]
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum Operation {
+	AND,
 	TAX,
 	LDA,
 	INX
@@ -30,7 +31,15 @@ pub enum AddressingMode {
 #[derive(Clone, Copy, Debug)]
 pub struct Instruction(pub Operation, pub AddressingMode, pub u8);
 
-static MOS6502_OP_CODES: [(u8, Instruction); 10] = [
+static MOS6502_OP_CODES: [(u8, Instruction); 18] = [
+	(0x29, Instruction(Operation::AND, AddressingMode::Immediate, 2)),
+	(0x25, Instruction(Operation::AND, AddressingMode::ZeroPage, 2)),
+	(0x35, Instruction(Operation::AND, AddressingMode::ZeroPageX, 2)),
+	(0x2d, Instruction(Operation::AND, AddressingMode::Absolute, 3)),
+	(0x3d, Instruction(Operation::AND, AddressingMode::AbsoluteX, 3)),
+	(0x39, Instruction(Operation::AND, AddressingMode::AbsoluteY, 3)),
+	(0x21, Instruction(Operation::AND, AddressingMode::IndirectX, 2)),
+	(0x31, Instruction(Operation::AND, AddressingMode::IndirectY, 2)),
 	(0xaa, Instruction(Operation::TAX, AddressingMode::None, 1)),
 	(0xa9, Instruction(Operation::LDA, AddressingMode::Immediate, 2)),
 	(0xa5, Instruction(Operation::LDA, AddressingMode::ZeroPage, 2)),
@@ -48,9 +57,15 @@ pub fn alloc_opcode_map() -> HashMap<u8, Instruction> {
 }
 
 type OpImpl = fn(&mut Registers, &mut Memory, AddressingMode);
-pub(super) static MOS6502_OP_IMPLS: [OpImpl; 3] = [
-	tax, lda, inx
+pub(super) static MOS6502_OP_IMPLS: [OpImpl; 4] = [
+	and, tax, lda, inx
 ];
+
+fn and(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) {
+	let addr = get_operand_addr(reg, mem, mode);
+	reg.acc &= mem.read(addr);
+	reg.status.update_zero_and_neg(reg.x);
+}
 
 fn tax(reg: &mut Registers, _: &mut Memory, _: AddressingMode) {
 	reg.x = reg.acc;
