@@ -18,6 +18,10 @@ pub enum Operation {
 	BPL,
 	BVC,
 	BVS,
+	CLC,
+	CLD,
+	CLI,
+	CLV,
 	TAX,
 	LDA,
 	INX
@@ -41,7 +45,7 @@ pub enum AddressingMode {
 #[derive(Clone, Copy, Debug)]
 pub struct Instruction(pub Operation, pub AddressingMode, pub u8);
 
-static MOS6502_OP_CODES: [(u8, Instruction); 33] = [
+static MOS6502_OP_CODES: [(u8, Instruction); 37] = [
 	(0x29, Instruction(Operation::AND, AddressingMode::Immediate, 2)),
 	(0x25, Instruction(Operation::AND, AddressingMode::ZeroPage, 2)),
 	(0x35, Instruction(Operation::AND, AddressingMode::ZeroPageX, 2)),
@@ -65,6 +69,10 @@ static MOS6502_OP_CODES: [(u8, Instruction); 33] = [
 	(0x10, Instruction(Operation::BPL, AddressingMode::None, 2)),
 	(0x50, Instruction(Operation::BVC, AddressingMode::None, 2)),
 	(0x70, Instruction(Operation::BVS, AddressingMode::None, 2)),
+	(0x18, Instruction(Operation::CLC, AddressingMode::None, 1)),
+	(0xd8, Instruction(Operation::CLD, AddressingMode::None, 1)),
+	(0x58, Instruction(Operation::CLI, AddressingMode::None, 1)),
+	(0xb8, Instruction(Operation::CLV, AddressingMode::None, 1)),
 	
 	(0xaa, Instruction(Operation::TAX, AddressingMode::None, 1)),
 	(0xa9, Instruction(Operation::LDA, AddressingMode::Immediate, 2)),
@@ -83,8 +91,8 @@ pub fn alloc_opcode_map() -> HashMap<u8, Instruction> {
 }
 
 type OpImpl = fn(&mut Registers, &mut Memory, AddressingMode) -> Option<u16>;
-pub(super) static MOS6502_OP_IMPLS: [OpImpl; 14] = [
-	and, asl, bcc, bcs, beq, bit, bmi, bne, bpl, bvc, bvs, tax, lda, inx
+pub(super) static MOS6502_OP_IMPLS: [OpImpl; 18] = [
+	and, asl, bcc, bcs, beq, bit, bmi, bne, bpl, bvc, bvs, clc, cld, cli, clv, tax, lda, inx
 ];
 
 fn and(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
@@ -158,6 +166,26 @@ fn bvc(reg: &mut Registers, mem: &mut Memory, _: AddressingMode) -> Option<u16> 
 
 fn bvs(reg: &mut Registers, mem: &mut Memory, _: AddressingMode) -> Option<u16> {
 	relative_branch(reg, mem, reg.status.contains(StatusFlags::OVERFLOW))
+}
+
+fn clc(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
+	reg.status.remove(StatusFlags::CARRY);
+	None
+}
+
+fn cld(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
+	reg.status.remove(StatusFlags::DECIMAL_MODE);
+	None
+}
+
+fn cli(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
+	reg.status.remove(StatusFlags::INTERRUPT_DISABLE);
+	None
+}
+
+fn clv(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
+	reg.status.remove(StatusFlags::OVERFLOW);
+	None
 }
 
 fn tax(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {

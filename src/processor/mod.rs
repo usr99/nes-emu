@@ -302,4 +302,20 @@ mod test {
 		cpu.run();
 		assert_eq!(cpu.reg.acc, 0x42);
 	}
+
+	#[test]
+	fn clc_cld_cli_clv() {
+		let mut cpu = MOS6502::new();
+		cpu.load(&[0x18, 0xd8, 0x58, 0xb8, 0x00]);
+		cpu.reset();
+		cpu.reg.status |= StatusFlags::CARRY;
+		cpu.reg.status |= StatusFlags::DECIMAL_MODE;
+		cpu.reg.status |= StatusFlags::INTERRUPT_DISABLE;
+		cpu.reg.status |= StatusFlags::OVERFLOW;
+		cpu.run();
+		assert!(!cpu.reg.status.contains(StatusFlags::CARRY));
+		assert!(!cpu.reg.status.contains(StatusFlags::DECIMAL_MODE));
+		assert!(!cpu.reg.status.contains(StatusFlags::INTERRUPT_DISABLE));
+		assert!(!cpu.reg.status.contains(StatusFlags::OVERFLOW));
+	}	
 }
