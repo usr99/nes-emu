@@ -225,4 +225,14 @@ mod test {
 		cpu.run();
 		assert_eq!(cpu.reg.acc, 0x42);
 	}	
+
+	#[test]
+	fn beq() {
+		let mut cpu = MOS6502::new();
+		cpu.load(&[0xf0, 0x03, 0x00, 0x00, 0xa9, 0x42, 0x00]);
+		cpu.reset();
+		cpu.reg.status |= StatusFlags::ZERO;
+		cpu.run();
+		assert_eq!(cpu.reg.acc, 0x42);
+	}	
 }
