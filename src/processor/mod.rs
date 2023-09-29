@@ -214,4 +214,15 @@ mod test {
 		cpu.load_and_run(&[0x90, 0x03, 0x00, 0x00, 0xa9, 0x42, 0x00]);
 		assert_eq!(cpu.reg.acc, 0x42);
 	}
+
+
+	#[test]
+	fn bcs() {
+		let mut cpu = MOS6502::new();
+		cpu.load(&[0xb0, 0x03, 0x00, 0x00, 0xa9, 0x42, 0x00]);
+		cpu.reset();
+		cpu.reg.status |= StatusFlags::CARRY;
+		cpu.run();
+		assert_eq!(cpu.reg.acc, 0x42);
+	}	
 }
