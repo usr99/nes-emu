@@ -234,5 +234,31 @@ mod test {
 		cpu.reg.status |= StatusFlags::ZERO;
 		cpu.run();
 		assert_eq!(cpu.reg.acc, 0x42);
+	}
+
+	#[test]
+	fn bit_zero_page() {
+		let mut cpu = MOS6502::new();
+		cpu.load(&[0x24, 0x25, 0x00]);
+		cpu.reset();
+		cpu.reg.acc = 0b0000_0011;
+		cpu.mem.write(0x25, 0b1111_0000);
+		cpu.run();
+		assert!(cpu.reg.status.contains(StatusFlags::ZERO));
+		assert!(cpu.reg.status.contains(StatusFlags::OVERFLOW));
+		assert!(cpu.reg.status.contains(StatusFlags::NEGATIVE));
+	}
+
+	#[test]
+	fn bit_absolute() {
+		let mut cpu = MOS6502::new();
+		cpu.load(&[0x2c, 0x25, 0x00, 0x00]);
+		cpu.reset();
+		cpu.reg.acc = 0b0001_0011;
+		cpu.mem.write(0x25, 0b1111_0000);
+		cpu.run();
+		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
+		assert!(cpu.reg.status.contains(StatusFlags::OVERFLOW));
+		assert!(cpu.reg.status.contains(StatusFlags::NEGATIVE));
 	}	
 }

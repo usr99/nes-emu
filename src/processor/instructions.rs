@@ -12,6 +12,7 @@ pub enum Operation {
 	BCC,
 	BCS,
 	BEQ,
+	BIT,
 	TAX,
 	LDA,
 	INX
@@ -35,7 +36,7 @@ pub enum AddressingMode {
 #[derive(Clone, Copy, Debug)]
 pub struct Instruction(pub Operation, pub AddressingMode, pub u8);
 
-static MOS6502_OP_CODES: [(u8, Instruction); 26] = [
+static MOS6502_OP_CODES: [(u8, Instruction); 28] = [
 	(0x29, Instruction(Operation::AND, AddressingMode::Immediate, 2)),
 	(0x25, Instruction(Operation::AND, AddressingMode::ZeroPage, 2)),
 	(0x35, Instruction(Operation::AND, AddressingMode::ZeroPageX, 2)),
@@ -52,6 +53,9 @@ static MOS6502_OP_CODES: [(u8, Instruction); 26] = [
 	(0x90, Instruction(Operation::BCC, AddressingMode::None, 2)),
 	(0xb0, Instruction(Operation::BCS, AddressingMode::None, 2)),
 	(0xf0, Instruction(Operation::BEQ, AddressingMode::None, 2)),
+	(0x24, Instruction(Operation::BIT, AddressingMode::ZeroPage, 2)),
+	(0x2c, Instruction(Operation::BIT, AddressingMode::Absolute, 3)),
+	
 	(0xaa, Instruction(Operation::TAX, AddressingMode::None, 1)),
 	(0xa9, Instruction(Operation::LDA, AddressingMode::Immediate, 2)),
 	(0xa5, Instruction(Operation::LDA, AddressingMode::ZeroPage, 2)),
@@ -69,8 +73,8 @@ pub fn alloc_opcode_map() -> HashMap<u8, Instruction> {
 }
 
 type OpImpl = fn(&mut Registers, &mut Memory, AddressingMode) -> Option<u16>;
-pub(super) static MOS6502_OP_IMPLS: [OpImpl; 8] = [
-	and, asl, bcc, bcs, beq, tax, lda, inx
+pub(super) static MOS6502_OP_IMPLS: [OpImpl; 9] = [
+	and, asl, bcc, bcs, beq, bit, tax, lda, inx
 ];
 
 fn and(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
@@ -102,25 +106,37 @@ fn asl(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u1
 	None
 }
 
-fn bcc(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
+fn bcc(reg: &mut Registers, mem: &mut Memory, _: AddressingMode) -> Option<u16> {
 	if reg.status.contains(StatusFlags::CARRY) {
 		return None;
 	}
 	Some(reg.pc + mem.read(reg.pc) as u16)
 }
 
-fn bcs(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
+fn bcs(reg: &mut Registers, mem: &mut Memory, _: AddressingMode) -> Option<u16> {
 	if !reg.status.contains(StatusFlags::CARRY) {
 		return None;
 	}
 	Some(reg.pc + mem.read(reg.pc) as u16)
 }
 
-fn beq(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
+fn beq(reg: &mut Registers, mem: &mut Memory, _: AddressingMode) -> Option<u16> {
 	if !reg.status.contains(StatusFlags::ZERO) {
 		return None;
 	}
 	Some(reg.pc + mem.read(reg.pc) as u16)
+}
+
+fn bit(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
+	let addr = get_operand_addr(reg, mem, mode);
+	let byte = mem.read(addr);
+	let res = byte & reg.acc;
+
+	reg.status.set(StatusFlags::ZERO, res == 0);
+	reg.status.set(StatusFlags::OVERFLOW, byte & 0b0100_0000 != 0);
+	reg.status.set(StatusFlags::NEGATIVE, byte & 0b1000_0000 != 0);
+
+	None
 }
 
 fn tax(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
