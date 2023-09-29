@@ -260,5 +260,46 @@ mod test {
 		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
 		assert!(cpu.reg.status.contains(StatusFlags::OVERFLOW));
 		assert!(cpu.reg.status.contains(StatusFlags::NEGATIVE));
-	}	
+	}
+
+	#[test]
+	fn bmi() {
+		let mut cpu = MOS6502::new();
+		cpu.load(&[0x30, 0x03, 0x00, 0x00, 0xa9, 0x42, 0x00]);
+		cpu.reset();
+		cpu.reg.status |= StatusFlags::NEGATIVE;
+		cpu.run();
+		assert_eq!(cpu.reg.acc, 0x42);
+	}
+
+	#[test]
+	fn bne() {
+		let mut cpu = MOS6502::new();
+		cpu.load_and_run(&[0xd0, 0x03, 0x00, 0x00, 0xa9, 0x42, 0x00]);
+		assert_eq!(cpu.reg.acc, 0x42);
+	}
+
+	#[test]
+	fn bpl() {
+		let mut cpu = MOS6502::new();
+		cpu.load_and_run(&[0x10, 0x03, 0x00, 0x00, 0xa9, 0x42, 0x00]);
+		assert_eq!(cpu.reg.acc, 0x42);
+	}
+
+	#[test]
+	fn bvc() {
+		let mut cpu = MOS6502::new();
+		cpu.load_and_run(&[0x50, 0x03, 0x00, 0x00, 0xa9, 0x42, 0x00]);
+		assert_eq!(cpu.reg.acc, 0x42);
+	}
+
+	#[test]
+	fn bvs() {
+		let mut cpu = MOS6502::new();
+		cpu.load(&[0x70, 0x03, 0x00, 0x00, 0xa9, 0x42, 0x00]);
+		cpu.reset();
+		cpu.reg.status |= StatusFlags::OVERFLOW;
+		cpu.run();
+		assert_eq!(cpu.reg.acc, 0x42);
+	}
 }
