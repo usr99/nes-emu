@@ -8,6 +8,7 @@ use super::{MOS6502, Registers};
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum Operation {
 	AND,
+	ASL,
 	TAX,
 	LDA,
 	INX
@@ -31,7 +32,7 @@ pub enum AddressingMode {
 #[derive(Clone, Copy, Debug)]
 pub struct Instruction(pub Operation, pub AddressingMode, pub u8);
 
-static MOS6502_OP_CODES: [(u8, Instruction); 18] = [
+static MOS6502_OP_CODES: [(u8, Instruction); 23] = [
 	(0x29, Instruction(Operation::AND, AddressingMode::Immediate, 2)),
 	(0x25, Instruction(Operation::AND, AddressingMode::ZeroPage, 2)),
 	(0x35, Instruction(Operation::AND, AddressingMode::ZeroPageX, 2)),
@@ -40,6 +41,11 @@ static MOS6502_OP_CODES: [(u8, Instruction); 18] = [
 	(0x39, Instruction(Operation::AND, AddressingMode::AbsoluteY, 3)),
 	(0x21, Instruction(Operation::AND, AddressingMode::IndirectX, 2)),
 	(0x31, Instruction(Operation::AND, AddressingMode::IndirectY, 2)),
+	(0x0a, Instruction(Operation::ASL, AddressingMode::None, 1)),
+	(0x06, Instruction(Operation::ASL, AddressingMode::ZeroPage, 2)),
+	(0x16, Instruction(Operation::ASL, AddressingMode::ZeroPageX, 2)),
+	(0x0e, Instruction(Operation::ASL, AddressingMode::Absolute, 3)),
+	(0x1e, Instruction(Operation::ASL, AddressingMode::AbsoluteY, 3)),
 	(0xaa, Instruction(Operation::TAX, AddressingMode::None, 1)),
 	(0xa9, Instruction(Operation::LDA, AddressingMode::Immediate, 2)),
 	(0xa5, Instruction(Operation::LDA, AddressingMode::ZeroPage, 2)),
@@ -57,14 +63,33 @@ pub fn alloc_opcode_map() -> HashMap<u8, Instruction> {
 }
 
 type OpImpl = fn(&mut Registers, &mut Memory, AddressingMode);
-pub(super) static MOS6502_OP_IMPLS: [OpImpl; 4] = [
-	and, tax, lda, inx
+pub(super) static MOS6502_OP_IMPLS: [OpImpl; 5] = [
+	and, asl, tax, lda, inx
 ];
 
 fn and(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) {
 	let addr = get_operand_addr(reg, mem, mode);
 	reg.acc &= mem.read(addr);
 	reg.status.update_zero_and_neg(reg.x);
+}
+
+fn asl(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) {
+	let old;
+	let new;
+
+	if let AddressingMode::None = mode {
+		old = reg.acc;
+		new = old << 1;
+		reg.acc = new;
+	} else {
+		let addr = get_operand_addr(reg, mem, mode);
+		old = mem.read(addr);
+		new = old << 1;
+		mem.write(addr, new);
+	}
+
+	reg.status.set(super::StatusFlags::CARRY, old & 0b1000_0000 != 0);
+	reg.status.update_zero_and_neg(new);
 }
 
 fn tax(reg: &mut Registers, _: &mut Memory, _: AddressingMode) {

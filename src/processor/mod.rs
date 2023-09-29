@@ -172,5 +172,27 @@ mod test {
 		cpu.mem.write_u16(0x7777 + 0x12, 0xBE);
 		cpu.run();
 		assert_eq!(cpu.reg.acc, 0xAD & 0xBE);
+	}
+
+	#[test]
+	fn asl_acc_carry_zero_flag() {
+		let mut cpu = MOS6502::new();
+		cpu.load(&[0x0a, 0x00]);
+		cpu.reset();
+		cpu.reg.acc = 0b1000_0000;
+		cpu.run();
+		assert_eq!(cpu.reg.acc, 0);
+		assert!(cpu.reg.status.contains(StatusFlags::ZERO));
+		assert!(cpu.reg.status.contains(StatusFlags::CARRY));
+	}
+
+	#[test]
+	fn asl_zero_page() {
+		let mut cpu = MOS6502::new();
+		cpu.load(&[0x06, 0x21, 0x00]);
+		cpu.reset();
+		cpu.mem.write(0x21, 0x42);
+		cpu.run();
+		assert_eq!(cpu.mem.read(0x21), 0x42 << 1);
 	}	
 }
