@@ -9,8 +9,8 @@ use super::{MOS6502, Registers, StatusFlags};
 pub enum Operation {
 	ADC, AND, ASL, BCC, BCS, BEQ, BIT, BMI, BNE, BPL, /* BRK, */ BVC, BVS, CLC,
 	CLD, CLI, CLV, CMP, CPX, CPY, DEC, DEX, DEY, EOR, INC, INX, INY, JMP,
-	/* JSR, */ LDA, LDX, LDY, LSR, NOP, ORA, PHA, PHP, PLA, PLP, ROL, ROR, /* RTI, */
-	/* RTS, */ SBC, SEC, SED, SEI, STA, STX, STY, TAX, TAY, TSX, TXA, TXS, TYA
+	JSR, LDA, LDX, LDY, LSR, NOP, ORA, PHA, PHP, PLA, PLP, ROL, ROR, /* RTI, */
+	RTS, SBC, SEC, SED, SEI, STA, STX, STY, TAX, TAY, TSX, TXA, TXS, TYA
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -31,7 +31,7 @@ pub enum AddressingMode {
 #[derive(Clone, Copy, Debug)]
 pub struct Instruction(pub Operation, pub AddressingMode, pub u8);
 
-static MOS6502_OP_CODES: [(u8, Instruction); 147] = [
+static MOS6502_OP_CODES: [(u8, Instruction); 149] = [
 	(0x69, Instruction(Operation::ADC, AddressingMode::Immediate, 2)),
 	(0x65, Instruction(Operation::ADC, AddressingMode::ZeroPage, 2)),
 	(0x75, Instruction(Operation::ADC, AddressingMode::ZeroPageX, 2)),
@@ -103,6 +103,7 @@ static MOS6502_OP_CODES: [(u8, Instruction); 147] = [
 	(0xc8, Instruction(Operation::INY, AddressingMode::None, 1)),
 	(0x4c, Instruction(Operation::JMP, AddressingMode::Absolute, 3)),
 	(0x6c, Instruction(Operation::JMP, AddressingMode::Indirect, 3)),
+	(0x20, Instruction(Operation::JSR, AddressingMode::Absolute, 3)),
 	(0xa9, Instruction(Operation::LDA, AddressingMode::Immediate, 2)),
 	(0xa5, Instruction(Operation::LDA, AddressingMode::ZeroPage, 2)),
 	(0xb5, Instruction(Operation::LDA, AddressingMode::ZeroPageX, 2)),
@@ -149,6 +150,7 @@ static MOS6502_OP_CODES: [(u8, Instruction); 147] = [
 	(0x76, Instruction(Operation::ROR, AddressingMode::ZeroPageX, 2)),
 	(0x6e, Instruction(Operation::ROR, AddressingMode::Absolute, 3)),
 	(0x7e, Instruction(Operation::ROR, AddressingMode::AbsoluteX, 3)),
+	(0x60, Instruction(Operation::RTS, AddressingMode::None, 1)),
 	(0xe9, Instruction(Operation::SBC, AddressingMode::Immediate, 2)),
 	(0xe5, Instruction(Operation::SBC, AddressingMode::ZeroPage, 2)),
 	(0xf5, Instruction(Operation::SBC, AddressingMode::ZeroPageX, 2)),
@@ -186,11 +188,11 @@ pub fn alloc_opcode_map() -> HashMap<u8, Instruction> {
 }
 
 type OpImpl = fn(&mut Registers, &mut Memory, AddressingMode) -> Option<u16>;
-pub(super) static MOS6502_OP_IMPLS: [OpImpl; 52] = [
+pub(super) static MOS6502_OP_IMPLS: [OpImpl; 54] = [
 	adc, and, asl, bcc, bcs, beq, bit, bmi, bne, bpl, bvc, bvs, clc,
 	cld, cli, clv, cmp, cpx, cpy, dec, dex, dey, eor, inc, inx, iny, jmp,
-	lda, ldx, ldy, lsr, nop, ora, pha, php, pla, plp, rol, ror,
-	sbc, sec, sed, sei, sta, stx, sty, tax, tay, tsx, txa, txs, tya
+	jsr, lda, ldx, ldy, lsr, nop, ora, pha, php, pla, plp, rol, ror,
+	rts, sbc, sec, sed, sei, sta, stx, sty, tax, tay, tsx, txa, txs, tya
 ];
 
 fn adc(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
@@ -395,6 +397,14 @@ fn jmp(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u1
 	Some(addr)
 }
 
+fn jsr(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
+	let addr = get_operand_addr(reg, mem, mode);
+	mem.write_u16(0x0100 + reg.sp as u16 - 1, reg.pc + 1);
+	reg.sp -= 2;
+
+	Some(addr)
+}
+
 fn lda(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
 	let addr = get_operand_addr(reg, mem, mode);
 	reg.acc = mem.read(addr);
@@ -526,20 +536,22 @@ fn ror(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u1
 	None
 }
 
+fn rts(reg: &mut Registers, mem: &mut Memory, _: AddressingMode) -> Option<u16> {
+	let addr = mem.read_u16(0x0100 + reg.sp as u16 + 1);
+	reg.sp += 2;
+
+	Some(addr.wrapping_add(1))
+}
+
 fn sbc(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
 	let addr = get_operand_addr(reg, mem, mode);
 	let byte = mem.read(addr);
-	println!("{:b}", byte);
-	println!("{:b}", !byte + 1);
-	dbg!(&reg);
 
 	// M - N - B <=> M + !N + C
 	mem.write(addr, (!byte) + 1); // one's complement
 	adc(reg, mem, mode);
 	mem.write(addr, byte); // restore byte
 	
-	dbg!(reg);
-
 	None
 }
 
