@@ -581,4 +581,25 @@ mod test {
 		assert_eq!(cpu.mem.read(0xabc0), 0xf0);
 		assert_eq!(cpu.mem.read(0xabc1), 0xf1);
 	}		
+
+	#[test]
+	fn tsx_txa_tay() {
+		let mut cpu = MOS6502::new();
+		cpu.load_and_run(&[0xba, 0x8a, 0xa8, 0x00]);
+		assert_eq!(cpu.reg.acc, 0xff);
+		assert_eq!(cpu.reg.x, 0xff);
+		assert_eq!(cpu.reg.y, 0xff);
+	}
+
+	#[test]
+	fn txs_tya() {
+		let mut cpu = MOS6502::new();
+		cpu.load(&[0x9a, 0x98, 0x00]);
+		cpu.reset();
+		cpu.reg.x = 0xa;
+		cpu.reg.y = 0xb;
+		cpu.run();
+		assert_eq!(cpu.reg.sp, 0xa);
+		assert_eq!(cpu.reg.acc, 0xb);
+	}	
 }

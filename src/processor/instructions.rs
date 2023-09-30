@@ -10,7 +10,7 @@ pub enum Operation {
 	/* ADC, */ AND, ASL, BCC, BCS, BEQ, BIT, BMI, BNE, BPL, /* BRK, */ BVC, BVS, CLC,
 	CLD, CLI, CLV, CMP, CPX, CPY, DEC, DEX, DEY, EOR, INC, INX, INY, JMP,
 	/* JSR, */ LDA, LDX, LDY, LSR, NOP, ORA, PHA, PHP, PLA, PLP, ROL, ROR, /* RTI, */
-	/* RTS, */ /* SBC, */ SEC, SED, SEI, STA, STX, STY, TAX, // TAY, TSX, TXA, TXS, TYA
+	/* RTS, */ /* SBC, */ SEC, SED, SEI, STA, STX, STY, TAX, TAY, TSX, TXA, TXS, TYA
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -31,7 +31,7 @@ pub enum AddressingMode {
 #[derive(Clone, Copy, Debug)]
 pub struct Instruction(pub Operation, pub AddressingMode, pub u8);
 
-static MOS6502_OP_CODES: [(u8, Instruction); 126] = [
+static MOS6502_OP_CODES: [(u8, Instruction); 131] = [
 	(0x29, Instruction(Operation::AND, AddressingMode::Immediate, 2)),
 	(0x25, Instruction(Operation::AND, AddressingMode::ZeroPage, 2)),
 	(0x35, Instruction(Operation::AND, AddressingMode::ZeroPageX, 2)),
@@ -158,6 +158,11 @@ static MOS6502_OP_CODES: [(u8, Instruction); 126] = [
 	(0x94, Instruction(Operation::STY, AddressingMode::ZeroPageX, 2)),
 	(0x8c, Instruction(Operation::STY, AddressingMode::Absolute, 3)),
 	(0xaa, Instruction(Operation::TAX, AddressingMode::None, 1)),
+	(0xa8, Instruction(Operation::TAY, AddressingMode::None, 1)),
+	(0xba, Instruction(Operation::TSX, AddressingMode::None, 1)),
+	(0x8a, Instruction(Operation::TXA, AddressingMode::None, 1)),
+	(0x9a, Instruction(Operation::TXS, AddressingMode::None, 1)),
+	(0x98, Instruction(Operation::TYA, AddressingMode::None, 1))
 ];
 
 pub fn alloc_opcode_map() -> HashMap<u8, Instruction> {
@@ -165,10 +170,11 @@ pub fn alloc_opcode_map() -> HashMap<u8, Instruction> {
 }
 
 type OpImpl = fn(&mut Registers, &mut Memory, AddressingMode) -> Option<u16>;
-pub(super) static MOS6502_OP_IMPLS: [OpImpl; 45] = [
+pub(super) static MOS6502_OP_IMPLS: [OpImpl; 50] = [
 	and, asl, bcc, bcs, beq, bit, bmi, bne, bpl, bvc, bvs, clc,
 	cld, cli, clv, cmp, cpx, cpy, dec, dex, dey, eor, inc, inx, iny, jmp,
-	lda, ldx, ldy, lsr, nop, ora, pha, php, pla, plp, rol, ror, sec, sed, sei, sta, stx, sty, tax
+	lda, ldx, ldy, lsr, nop, ora, pha, php, pla, plp, rol, ror,
+	sec, sed, sei, sta, stx, sty, tax, tay, tsx, txa, txs, tya
 ];
 
 fn and(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
@@ -515,6 +521,41 @@ fn sty(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u1
 fn tax(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
 	reg.x = reg.acc;
 	reg.status.update_zero_and_neg(reg.x);
+
+	None
+}
+
+fn tay(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
+	reg.y = reg.acc;
+	reg.status.update_zero_and_neg(reg.y);
+
+	None
+}
+
+fn tsx(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
+	reg.x = reg.sp;
+	reg.status.update_zero_and_neg(reg.x);
+
+	None
+}
+
+fn txa(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
+	reg.acc = reg.x;
+	reg.status.update_zero_and_neg(reg.acc);
+
+	None
+}
+
+fn txs(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
+	reg.sp = reg.x;
+	reg.status.update_zero_and_neg(reg.sp);
+
+	None
+}
+
+fn tya(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
+	reg.acc = reg.y;
+	reg.status.update_zero_and_neg(reg.acc);
 
 	None
 }
