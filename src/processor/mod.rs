@@ -7,6 +7,7 @@ use self::instructions::Instruction;
 
 bitflags! {
 	#[repr(transparent)]
+	#[derive(Debug)]
 	struct StatusFlags: u8 {
 		const CARRY = 0b0000_0001;
 		const ZERO = 0b0000_0010;
@@ -22,10 +23,11 @@ bitflags! {
 impl StatusFlags {
 	fn update_zero_and_neg(&mut self, value: u8) {
 		self.set(StatusFlags::ZERO, value == 0);
-		self.set(StatusFlags::NEGATIVE, value & 0b1000_0000 == 1);
+		self.set(StatusFlags::NEGATIVE, value & 0b1000_0000 != 0);
 	}
 }
 
+#[derive(Debug)]
 struct Registers {
 	pc: u16,
 	sp: u8,
@@ -355,5 +357,39 @@ mod test {
 		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
 		assert!(!cpu.reg.status.contains(StatusFlags::CARRY));
 		assert!(cpu.reg.status.contains(StatusFlags::NEGATIVE));
-	}		
+	}
+
+	#[test]
+	fn dec_absolute_x() {
+		let mut cpu = MOS6502::new();
+		cpu.load(&[0xde, 0xad, 0xde, 0x00]);
+		cpu.reset();
+		cpu.reg.x = 0x12;
+		cpu.mem.write(0xdead + 0x12, 0x22);
+		cpu.run();
+		assert_eq!(cpu.mem.read(0xdead + 0x12), 0x21);
+		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
+		assert!(!cpu.reg.status.contains(StatusFlags::NEGATIVE));
+	}
+
+	#[test]
+	fn dex() {
+		let mut cpu = MOS6502::new();
+		cpu.load(&[0xca, 0x00]);
+		cpu.reset();
+		cpu.reg.x = 0x1;
+		cpu.run();
+		assert_eq!(cpu.reg.x, 0x0);
+		assert!(cpu.reg.status.contains(StatusFlags::ZERO));
+		assert!(!cpu.reg.status.contains(StatusFlags::NEGATIVE));
+	}	
+
+	#[test]
+	fn dey() {
+		let mut cpu = MOS6502::new();
+		cpu.load_and_run(&[0x88, 0x00]);
+		assert_eq!(cpu.reg.y, 0xFF);
+		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
+		assert!(cpu.reg.status.contains(StatusFlags::NEGATIVE));
+	}
 }
