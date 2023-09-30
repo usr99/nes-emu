@@ -558,4 +558,27 @@ mod test {
 		assert!(cpu.reg.status.contains(StatusFlags::DECIMAL_MODE));
 		assert!(cpu.reg.status.contains(StatusFlags::INTERRUPT_DISABLE));
 	}
+
+	#[test]
+	fn sta_absolute_y() {
+		let mut cpu = MOS6502::new();
+		cpu.load(&[0x99, 0xcd, 0xab, 0x00]);
+		cpu.reset();
+		cpu.reg.acc = 0xf0;
+		cpu.reg.y = 0x10;
+		cpu.run();
+		assert_eq!(cpu.mem.read(0xabcd + 0x10), 0xf0);
+	}
+
+	#[test]
+	fn stx_sty_absolute() {
+		let mut cpu = MOS6502::new();
+		cpu.load(&[0x8e, 0xc0, 0xab, 0x8c, 0xc1, 0xab, 0x00]);
+		cpu.reset();
+		cpu.reg.x = 0xf0;
+		cpu.reg.y = 0xf1;
+		cpu.run();
+		assert_eq!(cpu.mem.read(0xabc0), 0xf0);
+		assert_eq!(cpu.mem.read(0xabc1), 0xf1);
+	}		
 }

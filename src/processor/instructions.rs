@@ -10,8 +10,7 @@ pub enum Operation {
 	/* ADC, */ AND, ASL, BCC, BCS, BEQ, BIT, BMI, BNE, BPL, /* BRK, */ BVC, BVS, CLC,
 	CLD, CLI, CLV, CMP, CPX, CPY, DEC, DEX, DEY, EOR, INC, INX, INY, JMP,
 	/* JSR, */ LDA, LDX, LDY, LSR, NOP, ORA, PHA, PHP, PLA, PLP, ROL, ROR, /* RTI, */
-	/* RTS, */ /* SBC, */ SEC, SED, SEI, // STA, STX, STY, TAX, TAY, TSX, TXA, TXS, TYA
-	TAX
+	/* RTS, */ /* SBC, */ SEC, SED, SEI, STA, STX, STY, TAX, // TAY, TSX, TXA, TXS, TYA
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -32,7 +31,7 @@ pub enum AddressingMode {
 #[derive(Clone, Copy, Debug)]
 pub struct Instruction(pub Operation, pub AddressingMode, pub u8);
 
-static MOS6502_OP_CODES: [(u8, Instruction); 113] = [
+static MOS6502_OP_CODES: [(u8, Instruction); 126] = [
 	(0x29, Instruction(Operation::AND, AddressingMode::Immediate, 2)),
 	(0x25, Instruction(Operation::AND, AddressingMode::ZeroPage, 2)),
 	(0x35, Instruction(Operation::AND, AddressingMode::ZeroPageX, 2)),
@@ -145,7 +144,19 @@ static MOS6502_OP_CODES: [(u8, Instruction); 113] = [
 	(0x38, Instruction(Operation::SEC, AddressingMode::None, 1)),
 	(0xf8, Instruction(Operation::SED, AddressingMode::None, 1)),
 	(0x78, Instruction(Operation::SEI, AddressingMode::None, 1)),
-
+	(0x85, Instruction(Operation::STA, AddressingMode::ZeroPage, 2)),
+	(0x95, Instruction(Operation::STA, AddressingMode::ZeroPageX, 2)),
+	(0x8d, Instruction(Operation::STA, AddressingMode::Absolute, 3)),
+	(0x9d, Instruction(Operation::STA, AddressingMode::AbsoluteX, 3)),
+	(0x99, Instruction(Operation::STA, AddressingMode::AbsoluteY, 3)),
+	(0x81, Instruction(Operation::STA, AddressingMode::IndirectX, 2)),
+	(0x91, Instruction(Operation::STA, AddressingMode::IndirectY, 2)),
+	(0x86, Instruction(Operation::STX, AddressingMode::ZeroPage, 2)),
+	(0x96, Instruction(Operation::STX, AddressingMode::ZeroPageX, 2)),
+	(0x8e, Instruction(Operation::STX, AddressingMode::Absolute, 3)),
+	(0x84, Instruction(Operation::STY, AddressingMode::ZeroPage, 2)),
+	(0x94, Instruction(Operation::STY, AddressingMode::ZeroPageX, 2)),
+	(0x8c, Instruction(Operation::STY, AddressingMode::Absolute, 3)),
 	(0xaa, Instruction(Operation::TAX, AddressingMode::None, 1)),
 ];
 
@@ -154,10 +165,10 @@ pub fn alloc_opcode_map() -> HashMap<u8, Instruction> {
 }
 
 type OpImpl = fn(&mut Registers, &mut Memory, AddressingMode) -> Option<u16>;
-pub(super) static MOS6502_OP_IMPLS: [OpImpl; 42] = [
+pub(super) static MOS6502_OP_IMPLS: [OpImpl; 45] = [
 	and, asl, bcc, bcs, beq, bit, bmi, bne, bpl, bvc, bvs, clc,
 	cld, cli, clv, cmp, cpx, cpy, dec, dex, dey, eor, inc, inx, iny, jmp,
-	lda, ldx, ldy, lsr, nop, ora, pha, php, pla, plp, rol, ror, sec, sed, sei, tax
+	lda, ldx, ldy, lsr, nop, ora, pha, php, pla, plp, rol, ror, sec, sed, sei, sta, stx, sty, tax
 ];
 
 fn and(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
@@ -477,6 +488,27 @@ fn sed(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
 
 fn sei(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
 	reg.status |= StatusFlags::INTERRUPT_DISABLE;
+	None
+}
+
+fn sta(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
+	let addr = get_operand_addr(reg, mem, mode);
+	mem.write(addr, reg.acc);
+
+	None
+}
+
+fn stx(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
+	let addr = get_operand_addr(reg, mem, mode);
+	mem.write(addr, reg.x);
+
+	None
+}
+
+fn sty(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
+	let addr = get_operand_addr(reg, mem, mode);
+	mem.write(addr, reg.y);
+
 	None
 }
 
