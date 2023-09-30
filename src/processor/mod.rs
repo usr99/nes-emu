@@ -392,4 +392,17 @@ mod test {
 		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
 		assert!(cpu.reg.status.contains(StatusFlags::NEGATIVE));
 	}
+
+	#[test]
+	fn eor_zero_page() {
+		let mut cpu = MOS6502::new();
+		cpu.load(&[0x45, 0xFF, 0x00]);
+		cpu.reset();
+		cpu.mem.write(0xFF, 0b0110_1001);
+		cpu.reg.acc = 0b0110_1001;
+		cpu.run();
+		assert_eq!(cpu.reg.acc, 0x0);
+		assert!(cpu.reg.status.contains(StatusFlags::ZERO));
+		assert!(!cpu.reg.status.contains(StatusFlags::NEGATIVE));
+	}	
 }

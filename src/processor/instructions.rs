@@ -28,6 +28,7 @@ pub enum Operation {
 	DEC,
 	DEX,
 	DEY,
+	EOR,
 	TAX,
 	LDA,
 	INX
@@ -51,7 +52,7 @@ pub enum AddressingMode {
 #[derive(Clone, Copy, Debug)]
 pub struct Instruction(pub Operation, pub AddressingMode, pub u8);
 
-static MOS6502_OP_CODES: [(u8, Instruction); 57] = [
+static MOS6502_OP_CODES: [(u8, Instruction); 65] = [
 	(0x29, Instruction(Operation::AND, AddressingMode::Immediate, 2)),
 	(0x25, Instruction(Operation::AND, AddressingMode::ZeroPage, 2)),
 	(0x35, Instruction(Operation::AND, AddressingMode::ZeroPageX, 2)),
@@ -99,6 +100,14 @@ static MOS6502_OP_CODES: [(u8, Instruction); 57] = [
 	(0xde, Instruction(Operation::DEC, AddressingMode::AbsoluteX, 3)),
 	(0xca, Instruction(Operation::DEX, AddressingMode::None, 1)),
 	(0x88, Instruction(Operation::DEY, AddressingMode::None, 1)),
+	(0x49, Instruction(Operation::EOR, AddressingMode::Immediate, 2)),
+	(0x45, Instruction(Operation::EOR, AddressingMode::ZeroPage, 2)),
+	(0x55, Instruction(Operation::EOR, AddressingMode::ZeroPageX, 2)),
+	(0x4d, Instruction(Operation::EOR, AddressingMode::Absolute, 3)),
+	(0x5d, Instruction(Operation::EOR, AddressingMode::AbsoluteX, 3)),
+	(0x59, Instruction(Operation::EOR, AddressingMode::AbsoluteY, 3)),
+	(0x41, Instruction(Operation::EOR, AddressingMode::IndirectX, 2)),
+	(0x51, Instruction(Operation::EOR, AddressingMode::IndirectY, 2)),
 	
 	(0xaa, Instruction(Operation::TAX, AddressingMode::None, 1)),
 	(0xa9, Instruction(Operation::LDA, AddressingMode::Immediate, 2)),
@@ -117,8 +126,8 @@ pub fn alloc_opcode_map() -> HashMap<u8, Instruction> {
 }
 
 type OpImpl = fn(&mut Registers, &mut Memory, AddressingMode) -> Option<u16>;
-pub(super) static MOS6502_OP_IMPLS: [OpImpl; 24] = [
-	and, asl, bcc, bcs, beq, bit, bmi, bne, bpl, bvc, bvs, clc, cld, cli, clv, cmp, cpx, cpy, dec, dex, dey, tax, lda, inx
+pub(super) static MOS6502_OP_IMPLS: [OpImpl; 25] = [
+	and, asl, bcc, bcs, beq, bit, bmi, bne, bpl, bvc, bvs, clc, cld, cli, clv, cmp, cpx, cpy, dec, dex, dey, eor, tax, lda, inx
 ];
 
 fn and(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
@@ -255,6 +264,14 @@ fn dey(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
 	reg.y = reg.y.wrapping_sub(1);
 	reg.status.update_zero_and_neg(reg.y);
 	
+	None
+}
+
+fn eor(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
+	let addr = get_operand_addr(reg, mem, mode);
+	reg.acc ^= mem.read(addr);
+	reg.status.update_zero_and_neg(reg.acc);
+
 	None
 }
 
