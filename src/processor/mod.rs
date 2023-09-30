@@ -132,16 +132,6 @@ mod test {
 		cpu.load_and_run(&[0xa9, 0xc0, 0xaa, 0xe8, 0x00]);
 		assert_eq!(cpu.reg.x, 0xc1);
 	}
- 
-	#[test]
-	fn inx_overflow() {
-		let mut cpu = MOS6502::new();
-		cpu.load(&[0xe8, 0xe8, 0x00]);
-		cpu.reset();
-		cpu.reg.x = 0xff;
-		cpu.run();
-		assert_eq!(cpu.reg.x, 1);
-	}
 
 	#[test]
 	fn and_immediate() {
@@ -405,4 +395,38 @@ mod test {
 		assert!(cpu.reg.status.contains(StatusFlags::ZERO));
 		assert!(!cpu.reg.status.contains(StatusFlags::NEGATIVE));
 	}	
+
+	#[test]
+	fn inc_absolute() {
+		let mut cpu = MOS6502::new();
+		cpu.load(&[0xee, 0xff, 0xca, 0x00]);
+		cpu.reset();
+		cpu.mem.write(0xcaff, 0xf5);
+		cpu.run();
+		assert_eq!(cpu.mem.read(0xcaff), 0xf6);
+		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
+		assert!(cpu.reg.status.contains(StatusFlags::NEGATIVE));
+	}
+
+	#[test]
+	fn inx_overflow() {
+		let mut cpu = MOS6502::new();
+		cpu.load(&[0xe8, 0xe8, 0x00]);
+		cpu.reset();
+		cpu.reg.x = 0xff;
+		cpu.run();
+		assert_eq!(cpu.reg.x, 1);
+	}	
+
+	#[test]
+	fn iny_overflow() {
+		let mut cpu = MOS6502::new();
+		cpu.load(&[0xc8, 0x00]);
+		cpu.reset();
+		cpu.reg.y = 0xff;
+		cpu.run();
+		assert_eq!(cpu.reg.y, 0);
+		assert!(cpu.reg.status.contains(StatusFlags::ZERO));
+		assert!(!cpu.reg.status.contains(StatusFlags::NEGATIVE));		
+	}		
 }
