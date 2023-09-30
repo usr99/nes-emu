@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, num::Wrapping, ops::Add};
 
 use crate::memory::Memory;
 
@@ -635,7 +635,11 @@ fn tya(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
 
 fn relative_branch(reg: &mut Registers, mem: &mut Memory, condition: bool) -> Option<u16> {
 	return match condition {
-		true => Some(reg.pc + mem.read(reg.pc) as u16),
+		true => {
+			let byte = mem.read(reg.pc) as u16;
+
+			Some(reg.pc.wrapping_add(byte).wrapping_add(1))
+		},
 		false => None
 	};
 }
