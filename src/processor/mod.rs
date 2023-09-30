@@ -102,6 +102,17 @@ mod test {
 	use super::*;
 
 	#[test]
+	fn adc_zero_page_x() {
+		let mut cpu = MOS6502::new();
+		cpu.load(&[0x75, 0xbb, 0x00]);
+		cpu.reset();
+		cpu.mem.write(0xbb, 0x12);
+		cpu.reg.acc = 0x12;
+		cpu.run();		
+		assert_eq!(cpu.reg.acc, 0x24);
+	}
+
+	#[test]
 	fn lda_0xa9_immediate_load_data() {
 		let mut cpu = MOS6502::new();
 		cpu.load_and_run(&[0xa9, 0x05, 0x00]);
@@ -601,5 +612,77 @@ mod test {
 		cpu.run();
 		assert_eq!(cpu.reg.sp, 0xa);
 		assert_eq!(cpu.reg.acc, 0xb);
+	}
+
+	#[test]
+	fn adc() {
+		let mut cpu = MOS6502::new();
+		cpu.load(&[0x69, 0x10, 0x00]);
+		cpu.reset();
+		cpu.reg.acc = 0x50;
+		cpu.run();
+		assert_eq!(cpu.reg.acc, 0x60);
+		assert!(!cpu.reg.status.contains(StatusFlags::CARRY));
+		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
+		assert!(!cpu.reg.status.contains(StatusFlags::OVERFLOW));
+		assert!(!cpu.reg.status.contains(StatusFlags::NEGATIVE));
+	}
+
+	#[test]
+	fn adc_overflow_positive() {
+		let mut cpu = MOS6502::new();
+		cpu.load(&[0x69, 0x50, 0x00]);
+		cpu.reset();
+		cpu.reg.acc = 0x50;
+		cpu.run();
+		assert_eq!(cpu.reg.acc, 0xa0);
+		assert!(!cpu.reg.status.contains(StatusFlags::CARRY));
+		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
+		assert!(cpu.reg.status.contains(StatusFlags::OVERFLOW));
+		assert!(cpu.reg.status.contains(StatusFlags::NEGATIVE));
+	}
+	
+	#[test]
+	fn adc_overflow_negative() {
+		let mut cpu = MOS6502::new();
+		cpu.load(&[0x69, 0xd0, 0x00]);
+		cpu.reset();
+		cpu.reg.acc = 0x90;
+		cpu.run();
+		assert_eq!(cpu.reg.acc, 0x60);
+		assert!(cpu.reg.status.contains(StatusFlags::CARRY));
+		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
+		assert!(cpu.reg.status.contains(StatusFlags::OVERFLOW));
+		assert!(!cpu.reg.status.contains(StatusFlags::NEGATIVE));
+	}
+
+	#[test]
+	fn sbc_zero() {
+		let mut cpu = MOS6502::new();
+		cpu.load(&[0xe9, 0x42, 0x00]);
+		cpu.reset();
+		cpu.reg.acc = 0x42;
+		cpu.run();
+		assert_eq!(cpu.reg.acc, 0x00);
+		assert!(cpu.reg.status.contains(StatusFlags::CARRY));
+		assert!(cpu.reg.status.contains(StatusFlags::ZERO));
+		assert!(!cpu.reg.status.contains(StatusFlags::OVERFLOW));
+		assert!(!cpu.reg.status.contains(StatusFlags::NEGATIVE));
+	}
+
+	#[test]
+	fn sbc_zero_page_x() {
+		let mut cpu = MOS6502::new();
+		cpu.load(&[0xf5, 0xd0, 0x00]);
+		cpu.reset();
+		cpu.reg.acc = 0x50;
+		cpu.reg.x = 0x5;
+		cpu.mem.write(0xd0 + 0x5, 0xb0);
+		cpu.run();
+		assert_eq!(cpu.reg.acc, 0xa0);
+		assert!(!cpu.reg.status.contains(StatusFlags::CARRY));
+		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
+		assert!(cpu.reg.status.contains(StatusFlags::OVERFLOW));
+		assert!(cpu.reg.status.contains(StatusFlags::NEGATIVE));
 	}	
 }
