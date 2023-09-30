@@ -7,16 +7,16 @@ use self::instructions::Instruction;
 
 bitflags! {
 	#[repr(transparent)]
-	#[derive(Debug)]
+	#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 	struct StatusFlags: u8 {
-		const CARRY = 0b0000_0001;
-		const ZERO = 0b0000_0010;
-		const INTERRUPT_DISABLE = 0b0000_0100;
-		const DECIMAL_MODE = 0b0000_1000;
-		const BREAK_COMMAND = 0b0001_0000;
-		const UNUSED = 0b0010_0000;
-		const OVERFLOW = 0b0100_0000;
-		const NEGATIVE = 0b1000_0000;
+		const CARRY = 1 << 0;
+		const ZERO = 1 << 1;
+		const INTERRUPT_DISABLE = 1 << 2;
+		const DECIMAL_MODE = 1 << 3;
+		const BREAK_COMMAND = 1 << 4;
+		const UNUSED = 1 << 5;
+		const OVERFLOW = 1 << 6;
+		const NEGATIVE = 1 << 7;
 	}
 }
 
@@ -27,7 +27,7 @@ impl StatusFlags {
 	}
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 struct Registers {
 	pc: u16,
 	sp: u8,
@@ -75,7 +75,8 @@ impl MOS6502 {
 
 		loop {
 			let opcode = self.mem.read(self.reg.pc);
-			println!("[{:x}] = {:x}", self.reg.pc, opcode);
+			println!("0x{:x} | 0x{:x}", self.reg.pc, opcode);
+			dbg!(&self.reg);
 			self.reg.pc += 1;
 
 			if opcode == 0x00 {
@@ -501,5 +502,27 @@ mod test {
 		assert_eq!(cpu.reg.acc, 0xff);
 		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
 		assert!(cpu.reg.status.contains(StatusFlags::NEGATIVE));
+	}
+
+	#[test]
+	fn pha() {
+		let mut cpu = MOS6502::new();
+		cpu.load_and_run(&[0xa9, 0xff, 0x48, 0x00]);
+		assert_eq!(cpu.mem.read(0x01ff), 0xff);
+	}
+
+	#[test]
+	fn php() {
+		let mut cpu = MOS6502::new();
+		cpu.load_and_run(&[0xc9, 0x00, 0x08, 0x00]);
+		assert_eq!(cpu.mem.read(0x01ff), 0b0011_0011);
+	}
+
+	#[test]
+	fn pha_php_pla_plp() {
+		let mut cpu = MOS6502::new();
+		cpu.load_and_run(&[0xa9, 0xff, 0x48, 0x08, 0x68, 0x28, 0x00]);
+		assert_eq!(cpu.reg.acc, 0b1011_0000);
+		assert_eq!(cpu.reg.status, StatusFlags::all().difference(StatusFlags::BREAK_COMMAND));
 	}		
 }

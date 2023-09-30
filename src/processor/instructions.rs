@@ -9,7 +9,7 @@ use super::{MOS6502, Registers, StatusFlags};
 pub enum Operation {
 	/* ADC, */ AND, ASL, BCC, BCS, BEQ, BIT, BMI, BNE, BPL, /* BRK, */ BVC, BVS, CLC,
 	CLD, CLI, CLV, CMP, CPX, CPY, DEC, DEX, DEY, EOR, INC, INX, INY, JMP,
-	/* JSR, */ LDA, LDX, LDY, LSR, NOP, ORA, //PHA, PHP, PLA, PLP, ROL, ROR, RTI,
+	/* JSR, */ LDA, LDX, LDY, LSR, NOP, ORA, PHA, PHP, PLA, PLP, // ROL, ROR, RTI,
 	// RTS, SBC, SEC, SED, SEI, STA, STX, STY, TAX, TAY, TSX, TXA, TXS, TYA
 	TAX
 }
@@ -32,7 +32,7 @@ pub enum AddressingMode {
 #[derive(Clone, Copy, Debug)]
 pub struct Instruction(pub Operation, pub AddressingMode, pub u8);
 
-static MOS6502_OP_CODES: [(u8, Instruction); 96] = [
+static MOS6502_OP_CODES: [(u8, Instruction); 100] = [
 	(0x29, Instruction(Operation::AND, AddressingMode::Immediate, 2)),
 	(0x25, Instruction(Operation::AND, AddressingMode::ZeroPage, 2)),
 	(0x35, Instruction(Operation::AND, AddressingMode::ZeroPageX, 2)),
@@ -128,6 +128,10 @@ static MOS6502_OP_CODES: [(u8, Instruction); 96] = [
 	(0x19, Instruction(Operation::ORA, AddressingMode::AbsoluteY, 3)),
 	(0x01, Instruction(Operation::ORA, AddressingMode::IndirectX, 2)),
 	(0x11, Instruction(Operation::ORA, AddressingMode::IndirectY, 2)),
+	(0x48, Instruction(Operation::PHA, AddressingMode::None, 1)),
+	(0x08, Instruction(Operation::PHP, AddressingMode::None, 1)),
+	(0x68, Instruction(Operation::PLA, AddressingMode::None, 1)),
+	(0x28, Instruction(Operation::PLP, AddressingMode::None, 1)),
 	
 	(0xaa, Instruction(Operation::TAX, AddressingMode::None, 1)),
 ];
@@ -137,10 +141,10 @@ pub fn alloc_opcode_map() -> HashMap<u8, Instruction> {
 }
 
 type OpImpl = fn(&mut Registers, &mut Memory, AddressingMode) -> Option<u16>;
-pub(super) static MOS6502_OP_IMPLS: [OpImpl; 33] = [
+pub(super) static MOS6502_OP_IMPLS: [OpImpl; 37] = [
 	and, asl, bcc, bcs, beq, bit, bmi, bne, bpl, bvc, bvs, clc,
 	cld, cli, clv, cmp, cpx, cpy, dec, dex, dey, eor, inc, inx, iny, jmp,
-	lda, ldx, ldy, lsr, nop, ora, tax
+	lda, ldx, ldy, lsr, nop, ora, pha, php, pla, plp, tax
 ];
 
 fn and(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
@@ -371,6 +375,38 @@ fn ora(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u1
 	reg.acc |= mem.read(addr);
 	reg.status.update_zero_and_neg(reg.acc);
 	
+	None
+}
+
+fn pha(reg: &mut Registers, mem: &mut Memory, _: AddressingMode) -> Option<u16> {
+	mem.write(0x0100 + reg.sp as u16, reg.acc);
+	reg.sp -= 1;
+
+	None
+}
+
+fn php(reg: &mut Registers, mem: &mut Memory, _: AddressingMode) -> Option<u16> {
+	let cpy = reg.status | StatusFlags::BREAK_COMMAND;
+	mem.write(0x0100 + reg.sp as u16, cpy.bits());
+	reg.sp -= 1;
+
+	None
+}
+
+fn pla(reg: &mut Registers, mem: &mut Memory, _: AddressingMode) -> Option<u16> {
+	reg.sp += 1;
+	reg.acc = mem.read(0x0100 + reg.sp as u16);
+	reg.status.update_zero_and_neg(reg.acc);
+
+	None
+}
+
+fn plp(reg: &mut Registers, mem: &mut Memory, _: AddressingMode) -> Option<u16> {
+	reg.sp += 1;
+	let byte = mem.read(0x0100 + reg.sp as u16);
+	reg.status = StatusFlags::from_bits(byte).unwrap();
+	reg.status.remove(StatusFlags::BREAK_COMMAND);
+
 	None
 }
 
