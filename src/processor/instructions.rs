@@ -10,7 +10,7 @@ pub enum Operation {
 	/* ADC, */ AND, ASL, BCC, BCS, BEQ, BIT, BMI, BNE, BPL, /* BRK, */ BVC, BVS, CLC,
 	CLD, CLI, CLV, CMP, CPX, CPY, DEC, DEX, DEY, EOR, INC, INX, INY, JMP,
 	/* JSR, */ LDA, LDX, LDY, LSR, NOP, ORA, PHA, PHP, PLA, PLP, ROL, ROR, /* RTI, */
-	/* RTS, */ // SBC, SEC, SED, SEI, STA, STX, STY, TAX, TAY, TSX, TXA, TXS, TYA
+	/* RTS, */ /* SBC, */ SEC, SED, SEI, // STA, STX, STY, TAX, TAY, TSX, TXA, TXS, TYA
 	TAX
 }
 
@@ -32,7 +32,7 @@ pub enum AddressingMode {
 #[derive(Clone, Copy, Debug)]
 pub struct Instruction(pub Operation, pub AddressingMode, pub u8);
 
-static MOS6502_OP_CODES: [(u8, Instruction); 110] = [
+static MOS6502_OP_CODES: [(u8, Instruction); 113] = [
 	(0x29, Instruction(Operation::AND, AddressingMode::Immediate, 2)),
 	(0x25, Instruction(Operation::AND, AddressingMode::ZeroPage, 2)),
 	(0x35, Instruction(Operation::AND, AddressingMode::ZeroPageX, 2)),
@@ -142,6 +142,9 @@ static MOS6502_OP_CODES: [(u8, Instruction); 110] = [
 	(0x76, Instruction(Operation::ROR, AddressingMode::ZeroPageX, 2)),
 	(0x6e, Instruction(Operation::ROR, AddressingMode::Absolute, 3)),
 	(0x7e, Instruction(Operation::ROR, AddressingMode::AbsoluteX, 3)),
+	(0x38, Instruction(Operation::SEC, AddressingMode::None, 1)),
+	(0xf8, Instruction(Operation::SED, AddressingMode::None, 1)),
+	(0x78, Instruction(Operation::SEI, AddressingMode::None, 1)),
 
 	(0xaa, Instruction(Operation::TAX, AddressingMode::None, 1)),
 ];
@@ -151,10 +154,10 @@ pub fn alloc_opcode_map() -> HashMap<u8, Instruction> {
 }
 
 type OpImpl = fn(&mut Registers, &mut Memory, AddressingMode) -> Option<u16>;
-pub(super) static MOS6502_OP_IMPLS: [OpImpl; 39] = [
+pub(super) static MOS6502_OP_IMPLS: [OpImpl; 42] = [
 	and, asl, bcc, bcs, beq, bit, bmi, bne, bpl, bvc, bvs, clc,
 	cld, cli, clv, cmp, cpx, cpy, dec, dex, dey, eor, inc, inx, iny, jmp,
-	lda, ldx, ldy, lsr, nop, ora, pha, php, pla, plp, rol, ror, tax
+	lda, ldx, ldy, lsr, nop, ora, pha, php, pla, plp, rol, ror, sec, sed, sei, tax
 ];
 
 fn and(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
@@ -459,6 +462,21 @@ fn ror(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u1
 	reg.status.set(StatusFlags::CARRY, old & 0b1000_0000 != 0);
 	reg.status.update_zero_and_neg(new);
 
+	None
+}
+
+fn sec(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
+	reg.status |= StatusFlags::CARRY;
+	None
+}
+
+fn sed(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
+	reg.status |= StatusFlags::DECIMAL_MODE;
+	None
+}
+
+fn sei(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
+	reg.status |= StatusFlags::INTERRUPT_DISABLE;
 	None
 }
 

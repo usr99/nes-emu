@@ -548,5 +548,14 @@ mod test {
 		assert!(!cpu.reg.status.contains(StatusFlags::CARRY));
 		assert!(cpu.reg.status.contains(StatusFlags::ZERO));
 		assert!(!cpu.reg.status.contains(StatusFlags::NEGATIVE));
-	}	
+	}
+
+	#[test]
+	fn sec_sed_sei() {
+		let mut cpu = MOS6502::new();
+		cpu.load_and_run(&[0x38, 0xf8, 0x78, 0x00]);
+		assert!(cpu.reg.status.contains(StatusFlags::CARRY));
+		assert!(cpu.reg.status.contains(StatusFlags::DECIMAL_MODE));
+		assert!(cpu.reg.status.contains(StatusFlags::INTERRUPT_DISABLE));
+	}
 }
