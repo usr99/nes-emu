@@ -636,9 +636,9 @@ fn tya(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
 fn relative_branch(reg: &mut Registers, mem: &mut Memory, condition: bool) -> Option<u16> {
 	return match condition {
 		true => {
-			let byte = mem.read(reg.pc) as u16;
+			let byte = mem.read(reg.pc) as i8;
 
-			Some(reg.pc.wrapping_add(byte).wrapping_add(1))
+			Some(reg.pc.wrapping_add(byte as u16).wrapping_add(1))
 		},
 		false => None
 	};

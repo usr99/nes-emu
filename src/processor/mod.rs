@@ -83,15 +83,18 @@ impl MOS6502 {
 			callback(self);
 
 			let opcode = self.mem.read(self.reg.pc);
-			println!("0x{:x} | 0x{:x}", self.reg.pc, opcode);
 			self.reg.pc += 1;
 
 			if opcode == 0x00 {
+				println!("Break on 0x{:x}", self.reg.pc - 1);
 				return ;
 			}
 
 			match ops.get(&opcode).copied() {
 				Some(Instruction(instr, mode, size)) => {
+
+					println!("0x{:x} | 0x{:x}\t{:?}\t{:?}", self.reg.pc - 1, opcode, instr, mode);
+
 					let op_impl = instructions::MOS6502_OP_IMPLS[instr as usize];
 					match op_impl(&mut self.reg, &mut self.mem, mode) {
 						Some(next_instr) => self.reg.pc = next_instr,
