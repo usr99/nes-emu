@@ -76,7 +76,7 @@ impl MOS6502 {
 		loop {
 			let opcode = self.mem.read(self.reg.pc);
 			println!("0x{:x} | 0x{:x}", self.reg.pc, opcode);
-			dbg!(&self.reg);
+			// dbg!(&self.reg);
 			self.reg.pc += 1;
 
 			if opcode == 0x00 {
@@ -524,5 +524,29 @@ mod test {
 		cpu.load_and_run(&[0xa9, 0xff, 0x48, 0x08, 0x68, 0x28, 0x00]);
 		assert_eq!(cpu.reg.acc, 0b1011_0000);
 		assert_eq!(cpu.reg.status, StatusFlags::all().difference(StatusFlags::BREAK_COMMAND));
-	}		
+	}
+
+	#[test]
+	fn rol_absolute_x() {
+		let mut cpu = MOS6502::new();
+		cpu.load(&[0x3e, 0xc0, 0xab, 0x3e, 0xc0, 0xab, 0x00]);
+		cpu.reset();
+		cpu.reg.x = 0xd;
+		cpu.mem.write(0xabc0 + 0xd, 0b1100_1111);
+		cpu.run();
+		assert_eq!(cpu.mem.read(0xabc0 + 0xd), 0b0011_1111);
+		assert!(cpu.reg.status.contains(StatusFlags::CARRY));
+		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
+		assert!(!cpu.reg.status.contains(StatusFlags::NEGATIVE));
+	}
+
+	#[test]
+	fn ror_acc() {
+		let mut cpu = MOS6502::new();
+		cpu.load_and_run(&[0x6a, 0x6a, 0x00]);
+		assert_eq!(cpu.reg.acc, 0x0);
+		assert!(!cpu.reg.status.contains(StatusFlags::CARRY));
+		assert!(cpu.reg.status.contains(StatusFlags::ZERO));
+		assert!(!cpu.reg.status.contains(StatusFlags::NEGATIVE));
+	}	
 }
