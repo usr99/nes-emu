@@ -428,5 +428,15 @@ mod test {
 		assert_eq!(cpu.reg.y, 0);
 		assert!(cpu.reg.status.contains(StatusFlags::ZERO));
 		assert!(!cpu.reg.status.contains(StatusFlags::NEGATIVE));		
+	}
+
+	#[test]
+	fn jmp_relative() {
+		let mut cpu = MOS6502::new();
+		cpu.load(&[0x6c, 0xef, 0xbe, 0xff, 0xff, 0xa9, 0x42, 0x00]);
+		cpu.reset();
+		cpu.mem.write_u16(0xbeef, 0x8000 + 5);
+		cpu.run();
+		assert_eq!(cpu.reg.acc, 0x42);
 	}		
 }
