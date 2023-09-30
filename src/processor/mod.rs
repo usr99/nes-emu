@@ -438,5 +438,31 @@ mod test {
 		cpu.mem.write_u16(0xbeef, 0x8000 + 5);
 		cpu.run();
 		assert_eq!(cpu.reg.acc, 0x42);
+	}
+
+	#[test]
+	fn ldx_zero_page_y_negative() {
+		let mut cpu = MOS6502::new();
+		cpu.load(&[0xb6, 0xaf, 0x00]);
+		cpu.reset();
+		cpu.reg.y = 0x05;
+		cpu.mem.write(0xaf + 0x05, 0xfe);
+		cpu.run();
+		assert_eq!(cpu.reg.x, 0xfe);
+		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
+		assert!(cpu.reg.status.contains(StatusFlags::NEGATIVE));
+	}
+
+	#[test]
+	fn ldy_absolute_x_negative() {
+		let mut cpu = MOS6502::new();
+		cpu.load(&[0xbc, 0xaf, 0xfa, 0x00]);
+		cpu.reset();
+		cpu.reg.x = 0x05;
+		cpu.mem.write(0xfaaf + 0x05, 0xfe);
+		cpu.run();
+		assert_eq!(cpu.reg.y, 0xfe);
+		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
+		assert!(cpu.reg.status.contains(StatusFlags::NEGATIVE));
 	}		
 }

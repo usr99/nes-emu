@@ -32,7 +32,7 @@ pub enum AddressingMode {
 #[derive(Clone, Copy, Debug)]
 pub struct Instruction(pub Operation, pub AddressingMode, pub u8);
 
-static MOS6502_OP_CODES: [(u8, Instruction); 72] = [
+static MOS6502_OP_CODES: [(u8, Instruction); 82] = [
 	(0x29, Instruction(Operation::AND, AddressingMode::Immediate, 2)),
 	(0x25, Instruction(Operation::AND, AddressingMode::ZeroPage, 2)),
 	(0x35, Instruction(Operation::AND, AddressingMode::ZeroPageX, 2)),
@@ -96,8 +96,6 @@ static MOS6502_OP_CODES: [(u8, Instruction); 72] = [
 	(0xc8, Instruction(Operation::INY, AddressingMode::None, 1)),
 	(0x4c, Instruction(Operation::JMP, AddressingMode::Absolute, 3)),
 	(0x6c, Instruction(Operation::JMP, AddressingMode::Indirect, 3)),
-	
-	(0xaa, Instruction(Operation::TAX, AddressingMode::None, 1)),
 	(0xa9, Instruction(Operation::LDA, AddressingMode::Immediate, 2)),
 	(0xa5, Instruction(Operation::LDA, AddressingMode::ZeroPage, 2)),
 	(0xb5, Instruction(Operation::LDA, AddressingMode::ZeroPageX, 2)),
@@ -105,7 +103,19 @@ static MOS6502_OP_CODES: [(u8, Instruction); 72] = [
 	(0xbd, Instruction(Operation::LDA, AddressingMode::AbsoluteX, 3)),
 	(0xb9, Instruction(Operation::LDA, AddressingMode::AbsoluteY, 3)),
 	(0xa1, Instruction(Operation::LDA, AddressingMode::IndirectX, 2)),
-	(0xb1, Instruction(Operation::LDA, AddressingMode::IndirectY, 2))
+	(0xb1, Instruction(Operation::LDA, AddressingMode::IndirectY, 2)),
+	(0xa2, Instruction(Operation::LDX, AddressingMode::Immediate, 2)),
+	(0xa6, Instruction(Operation::LDX, AddressingMode::ZeroPage, 2)),
+	(0xb6, Instruction(Operation::LDX, AddressingMode::ZeroPageY, 2)),
+	(0xae, Instruction(Operation::LDX, AddressingMode::Absolute, 3)),
+	(0xbe, Instruction(Operation::LDX, AddressingMode::AbsoluteY, 3)),
+	(0xa0, Instruction(Operation::LDY, AddressingMode::Immediate, 2)),
+	(0xa4, Instruction(Operation::LDY, AddressingMode::ZeroPage, 2)),
+	(0xb4, Instruction(Operation::LDY, AddressingMode::ZeroPageX, 2)),
+	(0xac, Instruction(Operation::LDY, AddressingMode::Absolute, 3)),
+	(0xbc, Instruction(Operation::LDY, AddressingMode::AbsoluteX, 3)),	
+	
+	(0xaa, Instruction(Operation::TAX, AddressingMode::None, 1)),
 ];
 
 pub fn alloc_opcode_map() -> HashMap<u8, Instruction> {
@@ -113,10 +123,10 @@ pub fn alloc_opcode_map() -> HashMap<u8, Instruction> {
 }
 
 type OpImpl = fn(&mut Registers, &mut Memory, AddressingMode) -> Option<u16>;
-pub(super) static MOS6502_OP_IMPLS: [OpImpl; 28] = [
+pub(super) static MOS6502_OP_IMPLS: [OpImpl; 30] = [
 	and, asl, bcc, bcs, beq, bit, bmi, bne, bpl, bvc, bvs, clc,
 	cld, cli, clv, cmp, cpx, cpy, dec, dex, dey, eor, inc, inx, iny, jmp,
-	lda, tax
+	lda, ldx, ldy, tax
 ];
 
 fn and(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
@@ -293,17 +303,33 @@ fn jmp(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u1
 	Some(addr)
 }
 
-fn tax(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
-	reg.x = reg.acc;
+fn lda(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
+	let addr = get_operand_addr(reg, mem, mode);
+	reg.acc = mem.read(addr);
+	reg.status.update_zero_and_neg(reg.acc);
+
+	None
+}
+
+fn ldx(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
+	let addr = get_operand_addr(reg, mem, mode);
+	reg.x = mem.read(addr);
 	reg.status.update_zero_and_neg(reg.x);
 
 	None
 }
 
-fn lda(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
+fn ldy(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
 	let addr = get_operand_addr(reg, mem, mode);
-	reg.acc = mem.read(addr);
-	reg.status.update_zero_and_neg(reg.acc);
+	reg.y = mem.read(addr);
+	reg.status.update_zero_and_neg(reg.y);
+
+	None
+}
+
+fn tax(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
+	reg.x = reg.acc;
+	reg.status.update_zero_and_neg(reg.x);
 
 	None
 }
