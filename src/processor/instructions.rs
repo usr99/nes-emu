@@ -9,7 +9,7 @@ use super::{MOS6502, Registers, StatusFlags};
 pub enum Operation {
 	/* ADC, */ AND, ASL, BCC, BCS, BEQ, BIT, BMI, BNE, BPL, /* BRK, */ BVC, BVS, CLC,
 	CLD, CLI, CLV, CMP, CPX, CPY, DEC, DEX, DEY, EOR, INC, INX, INY, JMP,
-	/* JSR, */ LDA, LDX, LDY, LSR, // NOP, ORA, PHA, PHP, PLA, PLP, ROL, ROR, RTI,
+	/* JSR, */ LDA, LDX, LDY, LSR, NOP, ORA, //PHA, PHP, PLA, PLP, ROL, ROR, RTI,
 	// RTS, SBC, SEC, SED, SEI, STA, STX, STY, TAX, TAY, TSX, TXA, TXS, TYA
 	TAX
 }
@@ -32,7 +32,7 @@ pub enum AddressingMode {
 #[derive(Clone, Copy, Debug)]
 pub struct Instruction(pub Operation, pub AddressingMode, pub u8);
 
-static MOS6502_OP_CODES: [(u8, Instruction); 87] = [
+static MOS6502_OP_CODES: [(u8, Instruction); 96] = [
 	(0x29, Instruction(Operation::AND, AddressingMode::Immediate, 2)),
 	(0x25, Instruction(Operation::AND, AddressingMode::ZeroPage, 2)),
 	(0x35, Instruction(Operation::AND, AddressingMode::ZeroPageX, 2)),
@@ -119,7 +119,15 @@ static MOS6502_OP_CODES: [(u8, Instruction); 87] = [
 	(0x56, Instruction(Operation::LSR, AddressingMode::ZeroPageX, 2)),	
 	(0x4e, Instruction(Operation::LSR, AddressingMode::Absolute, 3)),	
 	(0x5e, Instruction(Operation::LSR, AddressingMode::AbsoluteX, 3)),	
-	
+	(0xea, Instruction(Operation::NOP, AddressingMode::None, 1)),
+	(0x09, Instruction(Operation::ORA, AddressingMode::Immediate, 2)),
+	(0x05, Instruction(Operation::ORA, AddressingMode::ZeroPage, 2)),
+	(0x15, Instruction(Operation::ORA, AddressingMode::ZeroPageX, 2)),
+	(0x0d, Instruction(Operation::ORA, AddressingMode::Absolute, 3)),
+	(0x1d, Instruction(Operation::ORA, AddressingMode::AbsoluteX, 3)),
+	(0x19, Instruction(Operation::ORA, AddressingMode::AbsoluteY, 3)),
+	(0x01, Instruction(Operation::ORA, AddressingMode::IndirectX, 2)),
+	(0x11, Instruction(Operation::ORA, AddressingMode::IndirectY, 2)),
 	
 	(0xaa, Instruction(Operation::TAX, AddressingMode::None, 1)),
 ];
@@ -129,10 +137,10 @@ pub fn alloc_opcode_map() -> HashMap<u8, Instruction> {
 }
 
 type OpImpl = fn(&mut Registers, &mut Memory, AddressingMode) -> Option<u16>;
-pub(super) static MOS6502_OP_IMPLS: [OpImpl; 31] = [
+pub(super) static MOS6502_OP_IMPLS: [OpImpl; 33] = [
 	and, asl, bcc, bcs, beq, bit, bmi, bne, bpl, bvc, bvs, clc,
 	cld, cli, clv, cmp, cpx, cpy, dec, dex, dey, eor, inc, inx, iny, jmp,
-	lda, ldx, ldy, lsr, tax
+	lda, ldx, ldy, lsr, nop, ora, tax
 ];
 
 fn and(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
@@ -351,6 +359,18 @@ fn lsr(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u1
 	reg.status.set(super::StatusFlags::CARRY, old & 0b0000_0001 != 0);
 	reg.status.update_zero_and_neg(new);
 
+	None
+}
+
+fn nop(_: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
+	None
+}
+
+fn ora(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
+	let addr = get_operand_addr(reg, mem, mode);
+	reg.acc |= mem.read(addr);
+	reg.status.update_zero_and_neg(reg.acc);
+	
 	None
 }
 

@@ -477,5 +477,29 @@ mod test {
 		assert!(cpu.reg.status.contains(StatusFlags::CARRY));
 		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
 		assert!(!cpu.reg.status.contains(StatusFlags::NEGATIVE));
+	}
+
+	#[test]
+	fn nop() {
+		let mut cpu = MOS6502::new();
+		cpu.load_and_run(&[0xa9, 0xff, 0xea, 0xea, 0xea, 0xaa, 0x00]);
+		assert_eq!(cpu.reg.x, 0xff);
+		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
+		assert!(cpu.reg.status.contains(StatusFlags::NEGATIVE));
+	}	
+
+	#[test]
+	fn ora_indirect_x() {
+		let mut cpu = MOS6502::new();
+		cpu.load(&[0x01, 0xaf, 0x00]);
+		cpu.reset();
+		cpu.reg.acc = 0x0f;
+		cpu.reg.x = 0x05;
+		cpu.mem.write_u16(0xaf + 0x05, 0x4545);
+		cpu.mem.write_u16(0x4545, 0xf0);
+		cpu.run();
+		assert_eq!(cpu.reg.acc, 0xff);
+		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
+		assert!(cpu.reg.status.contains(StatusFlags::NEGATIVE));
 	}		
 }
