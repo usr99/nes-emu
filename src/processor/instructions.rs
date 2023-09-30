@@ -32,7 +32,7 @@ pub enum AddressingMode {
 #[derive(Clone, Copy, Debug)]
 pub struct Instruction(pub Operation, pub AddressingMode, pub u8);
 
-static MOS6502_OP_CODES: [(u8, Instruction); 82] = [
+static MOS6502_OP_CODES: [(u8, Instruction); 87] = [
 	(0x29, Instruction(Operation::AND, AddressingMode::Immediate, 2)),
 	(0x25, Instruction(Operation::AND, AddressingMode::ZeroPage, 2)),
 	(0x35, Instruction(Operation::AND, AddressingMode::ZeroPageX, 2)),
@@ -114,6 +114,12 @@ static MOS6502_OP_CODES: [(u8, Instruction); 82] = [
 	(0xb4, Instruction(Operation::LDY, AddressingMode::ZeroPageX, 2)),
 	(0xac, Instruction(Operation::LDY, AddressingMode::Absolute, 3)),
 	(0xbc, Instruction(Operation::LDY, AddressingMode::AbsoluteX, 3)),	
+	(0x4a, Instruction(Operation::LSR, AddressingMode::None, 1)),	
+	(0x46, Instruction(Operation::LSR, AddressingMode::ZeroPage, 2)),	
+	(0x56, Instruction(Operation::LSR, AddressingMode::ZeroPageX, 2)),	
+	(0x4e, Instruction(Operation::LSR, AddressingMode::Absolute, 3)),	
+	(0x5e, Instruction(Operation::LSR, AddressingMode::AbsoluteX, 3)),	
+	
 	
 	(0xaa, Instruction(Operation::TAX, AddressingMode::None, 1)),
 ];
@@ -123,10 +129,10 @@ pub fn alloc_opcode_map() -> HashMap<u8, Instruction> {
 }
 
 type OpImpl = fn(&mut Registers, &mut Memory, AddressingMode) -> Option<u16>;
-pub(super) static MOS6502_OP_IMPLS: [OpImpl; 30] = [
+pub(super) static MOS6502_OP_IMPLS: [OpImpl; 31] = [
 	and, asl, bcc, bcs, beq, bit, bmi, bne, bpl, bvc, bvs, clc,
 	cld, cli, clv, cmp, cpx, cpy, dec, dex, dey, eor, inc, inx, iny, jmp,
-	lda, ldx, ldy, tax
+	lda, ldx, ldy, lsr, tax
 ];
 
 fn and(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
@@ -323,6 +329,27 @@ fn ldy(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u1
 	let addr = get_operand_addr(reg, mem, mode);
 	reg.y = mem.read(addr);
 	reg.status.update_zero_and_neg(reg.y);
+
+	None
+}
+
+fn lsr(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
+	let old;
+	let new;
+
+	if let AddressingMode::None = mode {
+		old = reg.acc;
+		new = old >> 1;
+		reg.acc = new;
+	} else {
+		let addr = get_operand_addr(reg, mem, mode);
+		old = mem.read(addr);
+		new = old >> 1;
+		mem.write(addr, new);
+	}
+
+	reg.status.set(super::StatusFlags::CARRY, old & 0b0000_0001 != 0);
+	reg.status.update_zero_and_neg(new);
 
 	None
 }

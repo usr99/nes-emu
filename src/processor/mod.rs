@@ -464,5 +464,18 @@ mod test {
 		assert_eq!(cpu.reg.y, 0xfe);
 		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
 		assert!(cpu.reg.status.contains(StatusFlags::NEGATIVE));
+	}
+
+	#[test]
+	fn lsr_acc() {
+		let mut cpu = MOS6502::new();
+		cpu.load(&[0x4a, 0x00]);
+		cpu.reset();
+		cpu.reg.acc = 0b0000_1011;
+		cpu.run();
+		assert_eq!(cpu.reg.acc, 0b0000_1011 >> 1);
+		assert!(cpu.reg.status.contains(StatusFlags::CARRY));
+		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
+		assert!(!cpu.reg.status.contains(StatusFlags::NEGATIVE));
 	}		
 }
