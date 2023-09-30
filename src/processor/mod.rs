@@ -317,5 +317,43 @@ mod test {
 		assert!(!cpu.reg.status.contains(StatusFlags::DECIMAL_MODE));
 		assert!(!cpu.reg.status.contains(StatusFlags::INTERRUPT_DISABLE));
 		assert!(!cpu.reg.status.contains(StatusFlags::OVERFLOW));
+	}
+
+	#[test]
+	fn cmp_immediate() {
+		let mut cpu = MOS6502::new();
+		cpu.load(&[0xc9, 0x42, 0x00]);
+		cpu.reset();
+		cpu.reg.acc = 0x42;
+		cpu.run();
+		assert!(cpu.reg.status.contains(StatusFlags::ZERO));
+		assert!(cpu.reg.status.contains(StatusFlags::CARRY));
+		assert!(!cpu.reg.status.contains(StatusFlags::NEGATIVE));
 	}	
+
+	#[test]
+	fn cpx_zero_page() {
+		let mut cpu = MOS6502::new();
+		cpu.load(&[0xe4, 0x42, 0x00]);
+		cpu.reset();
+		cpu.reg.x = 0x55;
+		cpu.mem.write(0x42, 0x21);
+		cpu.run();
+		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
+		assert!(cpu.reg.status.contains(StatusFlags::CARRY));
+		assert!(!cpu.reg.status.contains(StatusFlags::NEGATIVE));
+	}
+
+	#[test]
+	fn cpy_absolute() {
+		let mut cpu = MOS6502::new();
+		cpu.load(&[0xcc, 0xad, 0xde, 0x00]);
+		cpu.reset();
+		cpu.reg.y = 0x5;
+		cpu.mem.write(0xdead, 0x17);
+		cpu.run();
+		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
+		assert!(!cpu.reg.status.contains(StatusFlags::CARRY));
+		assert!(cpu.reg.status.contains(StatusFlags::NEGATIVE));
+	}		
 }

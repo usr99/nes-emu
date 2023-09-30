@@ -22,6 +22,9 @@ pub enum Operation {
 	CLD,
 	CLI,
 	CLV,
+	CMP,
+	CPX,
+	CPY,
 	TAX,
 	LDA,
 	INX
@@ -45,7 +48,7 @@ pub enum AddressingMode {
 #[derive(Clone, Copy, Debug)]
 pub struct Instruction(pub Operation, pub AddressingMode, pub u8);
 
-static MOS6502_OP_CODES: [(u8, Instruction); 37] = [
+static MOS6502_OP_CODES: [(u8, Instruction); 51] = [
 	(0x29, Instruction(Operation::AND, AddressingMode::Immediate, 2)),
 	(0x25, Instruction(Operation::AND, AddressingMode::ZeroPage, 2)),
 	(0x35, Instruction(Operation::AND, AddressingMode::ZeroPageX, 2)),
@@ -73,6 +76,20 @@ static MOS6502_OP_CODES: [(u8, Instruction); 37] = [
 	(0xd8, Instruction(Operation::CLD, AddressingMode::None, 1)),
 	(0x58, Instruction(Operation::CLI, AddressingMode::None, 1)),
 	(0xb8, Instruction(Operation::CLV, AddressingMode::None, 1)),
+	(0xc9, Instruction(Operation::CMP, AddressingMode::Immediate, 2)),
+	(0xc5, Instruction(Operation::CMP, AddressingMode::ZeroPage, 2)),
+	(0xd5, Instruction(Operation::CMP, AddressingMode::ZeroPageX, 2)),
+	(0xcd, Instruction(Operation::CMP, AddressingMode::Absolute, 3)),
+	(0xdd, Instruction(Operation::CMP, AddressingMode::AbsoluteX, 3)),
+	(0xd9, Instruction(Operation::CMP, AddressingMode::AbsoluteY, 3)),
+	(0xc1, Instruction(Operation::CMP, AddressingMode::IndirectX, 2)),
+	(0xd1, Instruction(Operation::CMP, AddressingMode::IndirectY, 2)),
+	(0xe0, Instruction(Operation::CPX, AddressingMode::Immediate, 2)),
+	(0xe4, Instruction(Operation::CPX, AddressingMode::ZeroPage, 2)),
+	(0xec, Instruction(Operation::CPX, AddressingMode::Absolute, 3)),
+	(0xc0, Instruction(Operation::CPY, AddressingMode::Immediate, 2)),
+	(0xc4, Instruction(Operation::CPY, AddressingMode::ZeroPage, 2)),
+	(0xcc, Instruction(Operation::CPY, AddressingMode::Absolute, 3)),
 	
 	(0xaa, Instruction(Operation::TAX, AddressingMode::None, 1)),
 	(0xa9, Instruction(Operation::LDA, AddressingMode::Immediate, 2)),
@@ -91,8 +108,8 @@ pub fn alloc_opcode_map() -> HashMap<u8, Instruction> {
 }
 
 type OpImpl = fn(&mut Registers, &mut Memory, AddressingMode) -> Option<u16>;
-pub(super) static MOS6502_OP_IMPLS: [OpImpl; 18] = [
-	and, asl, bcc, bcs, beq, bit, bmi, bne, bpl, bvc, bvs, clc, cld, cli, clv, tax, lda, inx
+pub(super) static MOS6502_OP_IMPLS: [OpImpl; 21] = [
+	and, asl, bcc, bcs, beq, bit, bmi, bne, bpl, bvc, bvs, clc, cld, cli, clv, cmp, cpx, cpy, tax, lda, inx
 ];
 
 fn and(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
@@ -188,6 +205,27 @@ fn clv(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
 	None
 }
 
+fn cmp(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
+	let addr = get_operand_addr(reg, mem, mode);
+	compare(&mut reg.status, reg.acc, mem.read(addr));
+
+	None
+}
+
+fn cpx(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
+	let addr = get_operand_addr(reg, mem, mode);
+	compare(&mut reg.status, reg.x, mem.read(addr));
+
+	None
+}
+
+fn cpy(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
+	let addr = get_operand_addr(reg, mem, mode);
+	compare(&mut reg.status, reg.y, mem.read(addr));
+
+	None
+}
+
 fn tax(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
 	reg.x = reg.acc;
 	reg.status.update_zero_and_neg(reg.x);
@@ -215,6 +253,12 @@ fn relative_branch(reg: &mut Registers, mem: &mut Memory, condition: bool) -> Op
 		true => Some(reg.pc + mem.read(reg.pc) as u16),
 		false => None
 	};
+}
+
+fn compare(status: &mut StatusFlags, reg: u8, byte: u8) {
+	status.set(StatusFlags::CARRY, reg >= byte);
+	status.set(StatusFlags::ZERO, reg == byte);
+	status.set(StatusFlags::NEGATIVE, reg < byte);
 }
 
 fn get_operand_addr(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> u16 {
