@@ -94,7 +94,6 @@ impl MOS6502 {
 
 			match ops.get(&opcode).copied() {
 				Some(Instruction(instr, mode, size)) => {
-
 					// println!("0x{:x} | 0x{:x}\t{:?}\t{:?}", self.reg.pc - 1, opcode, instr, mode);
 
 					let op_impl = instructions::MOS6502_OP_IMPLS[instr as usize];
@@ -102,25 +101,6 @@ impl MOS6502 {
 						Some(next_instr) => self.reg.pc = next_instr,
 						None => self.reg.pc += (size - 1) as u16
 					};
-
-					let mut check = |idx, str| {
-						let lo = self.mem.read(idx);
-						let hi = self.mem.read(idx + 1);
-						if tmp[idx as usize] != lo {
-							println!("direction {} length {}",
-								self.mem.read(0x02),
-								self.mem.read(0x03)
-							);
-							println!("{str} {};{} => {lo};{} ", tmp[idx as usize], tmp[(idx + 1) as usize].wrapping_sub(0x2), hi.wrapping_sub(0x2));
-							// println!("0x{:x} | 0x{:x}\t{:?}\t{:?}\n", self.reg.pc - 1, opcode, instr, mode);
-							tmp[idx as usize] = lo;
-							tmp[(idx + 1) as usize] = hi;
-						}
-					};
-
-					check(0x10, "head");
-					// check(0x12, "body1");
-					// check(0x14, "body2");
 				},
 				None => panic!("invalid op code 0x{:x}", opcode)
 			}
@@ -188,6 +168,17 @@ mod test {
 		assert!(!cpu.reg.status.contains(StatusFlags::OVERFLOW));
 		assert!(!cpu.reg.status.contains(StatusFlags::NEGATIVE));
 	}
+
+	#[test]
+	fn adc_carry() {
+		let mut cpu = MOS6502::new();
+		cpu.load_and_run(&[0x38, 0xa9, 0x24, 0x69, 0x10, 0x00]);
+		assert_eq!(cpu.reg.acc, 0x35);
+		assert!(!cpu.reg.status.contains(StatusFlags::CARRY));
+		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
+		assert!(!cpu.reg.status.contains(StatusFlags::OVERFLOW));
+		assert!(!cpu.reg.status.contains(StatusFlags::NEGATIVE));
+	}	
 
 	#[test]
 	fn lda_0xa9_immediate_load_data() {
