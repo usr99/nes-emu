@@ -3,7 +3,7 @@ use bitflags::bitflags;
 mod instructions;
 use crate::memory::Memory;
 
-use self::instructions::Instruction;
+use self::instructions::{Instruction, Operation};
 
 bitflags! {
 	#[repr(transparent)]
@@ -79,6 +79,8 @@ impl MOS6502 {
 	{
 		let ops = instructions::alloc_opcode_map();
 
+		let mut tmp = [0u8; 0x16];
+
 		loop {
 			callback(self);
 
@@ -93,13 +95,32 @@ impl MOS6502 {
 			match ops.get(&opcode).copied() {
 				Some(Instruction(instr, mode, size)) => {
 
-					println!("0x{:x} | 0x{:x}\t{:?}\t{:?}", self.reg.pc - 1, opcode, instr, mode);
+					// println!("0x{:x} | 0x{:x}\t{:?}\t{:?}", self.reg.pc - 1, opcode, instr, mode);
 
 					let op_impl = instructions::MOS6502_OP_IMPLS[instr as usize];
 					match op_impl(&mut self.reg, &mut self.mem, mode) {
 						Some(next_instr) => self.reg.pc = next_instr,
 						None => self.reg.pc += (size - 1) as u16
 					};
+
+					let mut check = |idx, str| {
+						let lo = self.mem.read(idx);
+						let hi = self.mem.read(idx + 1);
+						if tmp[idx as usize] != lo {
+							println!("direction {} length {}",
+								self.mem.read(0x02),
+								self.mem.read(0x03)
+							);
+							println!("{str} {};{} => {lo};{} ", tmp[idx as usize], tmp[(idx + 1) as usize].wrapping_sub(0x2), hi.wrapping_sub(0x2));
+							// println!("0x{:x} | 0x{:x}\t{:?}\t{:?}\n", self.reg.pc - 1, opcode, instr, mode);
+							tmp[idx as usize] = lo;
+							tmp[(idx + 1) as usize] = hi;
+						}
+					};
+
+					check(0x10, "head");
+					// check(0x12, "body1");
+					// check(0x14, "body2");
 				},
 				None => panic!("invalid op code 0x{:x}", opcode)
 			}
@@ -162,6 +183,10 @@ mod test {
 		cpu.reg.acc = 0x12;
 		cpu.run();		
 		assert_eq!(cpu.reg.acc, 0x24);
+		assert!(!cpu.reg.status.contains(StatusFlags::CARRY));
+		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
+		assert!(!cpu.reg.status.contains(StatusFlags::OVERFLOW));
+		assert!(!cpu.reg.status.contains(StatusFlags::NEGATIVE));
 	}
 
 	#[test]
@@ -631,7 +656,7 @@ mod test {
 	#[test]
 	fn sbc_zero() {
 		let mut cpu = MOS6502::new();
-		cpu.load(&[0xe9, 0x42, 0x00]);
+		cpu.load(&[0x38, 0xe9, 0x42, 0x00]);
 		cpu.reset();
 		cpu.reg.acc = 0x42;
 		cpu.run();
@@ -643,6 +668,17 @@ mod test {
 	}
 
 	#[test]
+	fn sbc_18_minus_32_equals_242() {
+		let mut cpu = MOS6502::new();
+		cpu.load_and_run(&[0xa9, 0x12, 0x38, 0xe9, 0x20, 0x00]);
+		assert_eq!(cpu.reg.acc, 0xf2);
+		assert!(!cpu.reg.status.contains(StatusFlags::CARRY));
+		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
+		assert!(!cpu.reg.status.contains(StatusFlags::OVERFLOW));
+		assert!(cpu.reg.status.contains(StatusFlags::NEGATIVE));		
+	}
+
+	#[test]
 	fn sbc_zero_page_x() {
 		let mut cpu = MOS6502::new();
 		cpu.load(&[0xf5, 0xd0, 0x00]);
@@ -651,7 +687,7 @@ mod test {
 		cpu.reg.x = 0x5;
 		cpu.mem.write(0xd0 + 0x5, 0xb0);
 		cpu.run();
-		assert_eq!(cpu.reg.acc, 0xa0);
+		assert_eq!(cpu.reg.acc, 0x9f);
 		assert!(!cpu.reg.status.contains(StatusFlags::CARRY));
 		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
 		assert!(cpu.reg.status.contains(StatusFlags::OVERFLOW));

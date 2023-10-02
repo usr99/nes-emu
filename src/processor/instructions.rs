@@ -200,7 +200,7 @@ fn adc(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u1
 	let byte = mem.read(addr);
 
 	let mut sum = 0;
-	let mut carry = reg.status.bits() >> 7;
+	let mut carry = reg.status.bits() & 0b0000_0001;
 
 	for shift in 0..8 {
 		let x = (reg.acc >> shift) & 1;
@@ -548,10 +548,10 @@ fn sbc(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u1
 	let byte = mem.read(addr);
 
 	// M - N - B <=> M + !N + C
-	mem.write(addr, (!byte) + 1); // one's complement
+	mem.write(addr, !byte);
 	adc(reg, mem, mode);
 	mem.write(addr, byte); // restore byte
-	
+
 	None
 }
 
