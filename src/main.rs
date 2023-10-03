@@ -1,4 +1,4 @@
-use nes::processor::MOS6502;
+use nes::{processor::MOS6502, memory::Mem};
 use rand::Rng;
 use sdl2::{pixels::{PixelFormatEnum, Color}, EventPump, event::Event, keyboard::Keycode};
 
@@ -27,7 +27,7 @@ fn main() {
 
 	cpu.run_with_callback(move |cpu| {
 		handle_user_input(cpu, &mut event_pump);
-		cpu.mem.write(0xfe, rng.gen_range(1..16));
+		cpu.write(0xfe, rng.gen_range(1..16));
 
 		if read_screen_state(cpu, &mut screen_state) {
 			texture.update(None, &screen_state, 32 * 3).unwrap();
@@ -46,16 +46,16 @@ fn handle_user_input(cpu: &mut MOS6502, event_pump: &mut EventPump) {
 				std::process::exit(0)
 			},
 			Event::KeyDown { keycode: Some(Keycode::Z), .. } => {
-				cpu.mem.write(0xff, 0x77)
+				cpu.write(0xff, 0x77)
 			},
 			Event::KeyDown { keycode: Some(Keycode::S), .. } => {
-				cpu.mem.write(0xff, 0x73)
+				cpu.write(0xff, 0x73)
 			},
 			Event::KeyDown { keycode: Some(Keycode::Q), .. } => {
-				cpu.mem.write(0xff, 0x61)
+				cpu.write(0xff, 0x61)
 			},
 			Event::KeyDown { keycode: Some(Keycode::D), .. } => {
-				cpu.mem.write(0xff, 0x64)
+				cpu.write(0xff, 0x64)
 			},
 			_ => { /* do nothing */}
 		}
@@ -81,8 +81,8 @@ fn read_screen_state(cpu: &mut MOS6502, frame: &mut [u8; 32 * 32 * 3]) -> bool {
 	let mut update = false;
 
 	for i in 0x0200..0x0600 {
-		let color_idx = cpu.mem.read(i as u16);
-		let mut color = color(color_idx);
+		let color_idx = cpu.read(i as u16);
+		let color = color(color_idx);
 		
 		// if color == Color::BLACK {
 		// 	const sections: [Color; 4] = [Color::RED, Color::GREEN, Color::BLUE, Color::GREY];
