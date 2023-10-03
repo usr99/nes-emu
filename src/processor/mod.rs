@@ -66,7 +66,7 @@ impl MOS6502 {
 		self.reg.acc = 0;
 		self.reg.x = 0;
 		self.reg.status = StatusFlags::UNUSED;
-		self.reg.pc = 0x8000;
+		self.reg.pc = 0x8600;
 	}
 
 	pub fn load_rom(&mut self, rom: Rom) {

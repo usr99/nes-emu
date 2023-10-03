@@ -1,8 +1,8 @@
-use nes::{processor::MOS6502, memory::Mem};
+use std::io::{Read, Write};
+
+use nes::{processor::MOS6502, memory::{Mem, Rom}};
 use rand::Rng;
 use sdl2::{pixels::{PixelFormatEnum, Color}, EventPump, event::Event, keyboard::Keycode};
-
-mod game;
 
 fn main() {
 	let sdl_context = sdl2::init().unwrap();
@@ -18,8 +18,13 @@ fn main() {
 	let creator = canvas.texture_creator();
 	let mut texture = creator.create_texture_target(PixelFormatEnum::RGB24, 32, 32).unwrap();
 
+	let rom = match Rom::from_file("snake.nes") {
+		Ok(rom) => rom,
+		Err(msg) => panic!("{msg}")
+	};
+
 	let mut cpu = nes::processor::MOS6502::new();
-	cpu.load(&game::SNAKE);
+	cpu.load_rom(rom);
 	cpu.reset();
 
 	let mut screen_state = [0u8; 32 * 32 * 3];
@@ -83,11 +88,6 @@ fn read_screen_state(cpu: &mut MOS6502, frame: &mut [u8; 32 * 32 * 3]) -> bool {
 	for i in 0x0200..0x0600 {
 		let color_idx = cpu.read(i as u16);
 		let color = color(color_idx);
-		
-		// if color == Color::BLACK {
-		// 	const sections: [Color; 4] = [Color::RED, Color::GREEN, Color::BLUE, Color::GREY];
-		// 	color = sections[(i - 0x0200) / 256];
-		// }
 		let (b1, b2, b3) = color.rgb();
 
 		if frame[frame_idx] != b1 || frame[frame_idx + 1] != b2 || frame[frame_idx + 2] != b3 {
