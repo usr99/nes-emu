@@ -1,3 +1,5 @@
+use std::{fs::File, path::Path, io::Read};
+
 pub trait Mem {
 	// Required methods
 	fn read(&self, addr: u16) -> u8;
@@ -21,18 +23,24 @@ const RAM: u16 = 0x0000;
 const RAM_MIRRORS_END: u16 = 0x1FFF;
 const PPU_REGISTERS: u16 = 0x2000;
 const PPU_REGISTERS_MIRRORS_END: u16 = 0x3FFF;
+
 pub struct Bus {
-	pub cpu_vram: [u8; 0xFFFF]
+	cpu_vram: [u8; 2048],
+	rom: Option<Rom>
 }
 
 impl Bus {
 	pub fn new() -> Self {
-		Bus { cpu_vram: [0; 0xFFFF] }
+		Bus { cpu_vram: [0; 2048], rom: None }
+	}
+
+	pub fn load_rom(&mut self, rom: Rom) {
+		self.rom = Some(rom);
 	}
 }
 
 impl Mem for Bus {
-	fn read(&self, addr: u16) -> u8 {
+	fn read(&self, mut addr: u16) -> u8 {
 		match addr {
 			RAM..= RAM_MIRRORS_END => {
 				let mirror_down_addr = addr & 0b00000111_11111111;
@@ -42,9 +50,17 @@ impl Mem for Bus {
 				let _mirror_down_addr = addr & 0b00100000_00000111;
 				todo!("PPU is not supported yet")
 			},
+			0x8000..=0xFFFF => {
+				addr -= 0x8000;
+				if self.rom.as_ref().unwrap().prg_rom.len() == 0x4000 && addr >= 0x4000 {
+					addr %= 0x4000;
+				}
+		
+				self.rom.as_ref().unwrap().prg_rom[addr as usize]
+			}
 			_ => {
-				// println!("Ignoring mem access at {addr}");
-				self.cpu_vram[addr as usize]
+				println!("Ignoring mem access at {addr}");
+				0
 			}
 		}
 	}
@@ -59,10 +75,93 @@ impl Mem for Bus {
 				let _mirror_down_addr = addr & 0b00100000_00000111;
 				todo!("PPU is not supported yet")
 			},
-			_ => {
-				// println!("Ignoring mem access at {addr}");
-				self.cpu_vram[addr as usize] = value;
-			}
+			0x8000..=0xFFFF => panic!("Attempt to write to cartridge ROM space"),
+			_ => println!("Ignoring mem access at {addr}")
 		}		
+	}
+}
+
+#[derive(Debug)]
+enum Mirroring {
+	Vertical,
+	Horizontal,
+	FourScreen
+}
+
+const NES_TAG: [u8; 4] = [0x4e, 0x45, 0x53, 0x1a];
+const PRG_ROM_PAGE_SIZE: usize = 0x4000;
+const CHR_ROM_PAGE_SIZE: usize = 0x2000;
+
+#[derive(Debug)]
+pub struct Rom {
+	prg_rom: Vec<u8>,
+	chr_rom: Vec<u8>,
+	mapper: u8,
+	screen_mirroring: Mirroring
+}
+
+impl Rom {
+	pub fn from_raw(raw: &Vec<u8>) -> Result<Rom, String> {
+		if &raw[0..4] != NES_TAG {
+			return Err("File is not in iNES file format".to_string());
+		}
+
+		let mapper = (raw[7] & 0b1111_0000) | (raw[6] >> 4);
+
+		let version = (raw[7] >> 2) & 0b11;
+		if version != 0 {
+			return Err("NES2.0 format is not supported".to_string());
+		}
+
+		let four_screen = raw[6] & 0b1000 != 0;
+		let vertical_mirroring = raw[6] & 0b1 != 0;
+		let screen_mirroring = match (four_screen, vertical_mirroring) {
+			(true, _) => Mirroring::FourScreen,
+			(false, true) => Mirroring::Vertical,
+			(false, false) => Mirroring::Horizontal
+		};
+
+		let prg_rom_size = raw[4] as usize * PRG_ROM_PAGE_SIZE;
+		let chr_rom_size = raw[5] as usize * CHR_ROM_PAGE_SIZE;
+
+		let skip_trainer = raw[6] & 0b100 != 0;
+
+		let prg_rom_start = 16 + if skip_trainer { 512 } else { 0 };
+		let chr_rom_start =  prg_rom_start + prg_rom_size;
+
+		Ok(Rom {
+			prg_rom: raw[prg_rom_start..][..prg_rom_size].to_vec(),
+			chr_rom: raw[chr_rom_start..][..chr_rom_size].to_vec(),
+			mapper,
+			screen_mirroring
+		})
+	}
+
+	pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Rom, String> {
+		let mut file = File::open(path).map_err(|e| e.to_string())?;
+
+		let mut raw = Vec::new();
+		file.read_to_end(&mut raw).map_err(|e| e.to_string())?;
+		
+		Self::from_raw(&raw)
+	}
+}
+
+#[cfg(test)]
+mod test {
+	use super::*;
+
+	impl Bus {
+		#[allow(non_snake_case)]
+		pub fn __test__load_program(&mut self, program: &[u8]) {
+			let prg_rom = program.to_vec();
+
+			self.rom = Some(Rom {
+				prg_rom,
+				chr_rom: vec![],
+				mapper: 0,
+				screen_mirroring: Mirroring::Vertical
+			});
+		}
 	}
 }
