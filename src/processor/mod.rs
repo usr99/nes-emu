@@ -1,7 +1,7 @@
 use bitflags::bitflags;
 
 mod instructions;
-use crate::memory::Memory;
+use crate::memory::{Mem, Bus};
 
 use self::instructions::{Instruction, Operation};
 
@@ -39,7 +39,17 @@ struct Registers {
 
 pub struct MOS6502 {
 	reg: Registers,
-	pub mem: Memory
+	bus: Bus
+}
+
+impl Mem for MOS6502 {
+	fn read(&self, addr: u16) -> u8 {
+		self.bus.read(addr)
+	}
+
+	fn write(&mut self, addr: u16, value: u8) {
+		self.bus.write(addr, value);
+	}
 }
 
 impl MOS6502 {
@@ -48,7 +58,7 @@ impl MOS6502 {
 			reg: Registers {
 				pc: 0, sp: 0xFF, acc: 0, x: 0, y: 0,
 				status: StatusFlags::UNUSED },
-			mem: Memory::new()
+			bus: Bus::new()
 		}
 	}
 
@@ -56,12 +66,12 @@ impl MOS6502 {
 		self.reg.acc = 0;
 		self.reg.x = 0;
 		self.reg.status = StatusFlags::UNUSED;
-		self.reg.pc = self.mem.read_u16(0xFFFC);
+		self.reg.pc = self.read_u16(0xFFFC);
 	}
 
 	pub fn load(&mut self, program: &[u8]) {
-		self.mem.load(0x0600, program);
-		self.mem.write_u16(0xFFFC, 0x0600);
+		self.bus.cpu_vram[0x0600..(0x0600 + program.len())].copy_from_slice(program);
+		self.write_u16(0xFFFC, 0x0600);
 	}
 
 	pub fn load_and_run(&mut self, program: &[u8]) {
@@ -84,7 +94,7 @@ impl MOS6502 {
 		loop {
 			callback(self);
 
-			let opcode = self.mem.read(self.reg.pc);
+			let opcode = self.read(self.reg.pc);
 			self.reg.pc += 1;
 
 			if opcode == 0x00 {
@@ -97,7 +107,7 @@ impl MOS6502 {
 					// println!("0x{:x} | 0x{:x}\t{:?}\t{:?}", self.reg.pc - 1, opcode, instr, mode);
 
 					let op_impl = instructions::MOS6502_OP_IMPLS[instr as usize];
-					match op_impl(&mut self.reg, &mut self.mem, mode) {
+					match op_impl(self, mode) {
 						Some(next_instr) => self.reg.pc = next_instr,
 						None => self.reg.pc += (size - 1) as u16
 					};
@@ -159,7 +169,7 @@ mod test {
 		let mut cpu = MOS6502::new();
 		cpu.load(&[0x75, 0xbb, 0x00]);
 		cpu.reset();
-		cpu.mem.write(0xbb, 0x12);
+		cpu.write(0xbb, 0x12);
 		cpu.reg.acc = 0x12;
 		cpu.run();		
 		assert_eq!(cpu.reg.acc, 0x24);
@@ -229,8 +239,8 @@ mod test {
 		cpu.load(&[0xb5, 0x42, 0x35, 0x21, 0x00]);
 		cpu.reset();
 		cpu.reg.x = 0x05;
-		cpu.mem.write(0x42 + 0x05, 0x88);
-		cpu.mem.write(0x21 + 0x05, 0x72);
+		cpu.write(0x42 + 0x05, 0x88);
+		cpu.write(0x21 + 0x05, 0x72);
 		cpu.run();
 		assert_eq!(cpu.reg.acc, 0x88 & 0x72);
 	}
@@ -242,8 +252,8 @@ mod test {
 		cpu.reset();
 		cpu.reg.acc = 0xAD;
 		cpu.reg.y = 0x12;
-		cpu.mem.write_u16(0x42, 0x7777);
-		cpu.mem.write_u16(0x7777 + 0x12, 0xBE);
+		cpu.write_u16(0x42, 0x7777);
+		cpu.write_u16(0x7777 + 0x12, 0xBE);
 		cpu.run();
 		assert_eq!(cpu.reg.acc, 0xAD & 0xBE);
 	}
@@ -265,9 +275,9 @@ mod test {
 		let mut cpu = MOS6502::new();
 		cpu.load(&[0x06, 0x21, 0x00]);
 		cpu.reset();
-		cpu.mem.write(0x21, 0x42);
+		cpu.write(0x21, 0x42);
 		cpu.run();
-		assert_eq!(cpu.mem.read(0x21), 0x42 << 1);
+		assert_eq!(cpu.read(0x21), 0x42 << 1);
 	}
 
 	#[test]
@@ -314,7 +324,7 @@ mod test {
 		cpu.load(&[0x24, 0x25, 0x00]);
 		cpu.reset();
 		cpu.reg.acc = 0b0000_0011;
-		cpu.mem.write(0x25, 0b1111_0000);
+		cpu.write(0x25, 0b1111_0000);
 		cpu.run();
 		assert!(cpu.reg.status.contains(StatusFlags::ZERO));
 		assert!(cpu.reg.status.contains(StatusFlags::OVERFLOW));
@@ -327,7 +337,7 @@ mod test {
 		cpu.load(&[0x2c, 0x25, 0x00, 0x00]);
 		cpu.reset();
 		cpu.reg.acc = 0b0001_0011;
-		cpu.mem.write(0x25, 0b1111_0000);
+		cpu.write(0x25, 0b1111_0000);
 		cpu.run();
 		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
 		assert!(cpu.reg.status.contains(StatusFlags::OVERFLOW));
@@ -409,7 +419,7 @@ mod test {
 		cpu.load(&[0xe4, 0x42, 0x00]);
 		cpu.reset();
 		cpu.reg.x = 0x55;
-		cpu.mem.write(0x42, 0x21);
+		cpu.write(0x42, 0x21);
 		cpu.run();
 		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
 		assert!(cpu.reg.status.contains(StatusFlags::CARRY));
@@ -422,7 +432,7 @@ mod test {
 		cpu.load(&[0xcc, 0xad, 0xde, 0x00]);
 		cpu.reset();
 		cpu.reg.y = 0x5;
-		cpu.mem.write(0xdead, 0x17);
+		cpu.write(0xdead, 0x17);
 		cpu.run();
 		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
 		assert!(!cpu.reg.status.contains(StatusFlags::CARRY));
@@ -435,9 +445,9 @@ mod test {
 		cpu.load(&[0xde, 0xad, 0xde, 0x00]);
 		cpu.reset();
 		cpu.reg.x = 0x12;
-		cpu.mem.write(0xdead + 0x12, 0x22);
+		cpu.write(0xdead + 0x12, 0x22);
 		cpu.run();
-		assert_eq!(cpu.mem.read(0xdead + 0x12), 0x21);
+		assert_eq!(cpu.read(0xdead + 0x12), 0x21);
 		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
 		assert!(!cpu.reg.status.contains(StatusFlags::NEGATIVE));
 	}
@@ -468,7 +478,7 @@ mod test {
 		let mut cpu = MOS6502::new();
 		cpu.load(&[0x45, 0xFF, 0x00]);
 		cpu.reset();
-		cpu.mem.write(0xFF, 0b0110_1001);
+		cpu.write(0xFF, 0b0110_1001);
 		cpu.reg.acc = 0b0110_1001;
 		cpu.run();
 		assert_eq!(cpu.reg.acc, 0x0);
@@ -481,9 +491,9 @@ mod test {
 		let mut cpu = MOS6502::new();
 		cpu.load(&[0xee, 0xff, 0xca, 0x00]);
 		cpu.reset();
-		cpu.mem.write(0xcaff, 0xf5);
+		cpu.write(0xcaff, 0xf5);
 		cpu.run();
-		assert_eq!(cpu.mem.read(0xcaff), 0xf6);
+		assert_eq!(cpu.read(0xcaff), 0xf6);
 		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
 		assert!(cpu.reg.status.contains(StatusFlags::NEGATIVE));
 	}
@@ -515,7 +525,7 @@ mod test {
 		let mut cpu = MOS6502::new();
 		cpu.load(&[0x6c, 0xef, 0xbe, 0xff, 0xff, 0xa9, 0x42, 0x00]);
 		cpu.reset();
-		cpu.mem.write_u16(0xbeef, 0x0600 + 5);
+		cpu.write_u16(0xbeef, 0x0600 + 5);
 		cpu.run();
 		assert_eq!(cpu.reg.acc, 0x42);
 	}
@@ -534,7 +544,7 @@ mod test {
 		cpu.load(&[0xb6, 0xaf, 0x00]);
 		cpu.reset();
 		cpu.reg.y = 0x05;
-		cpu.mem.write(0xaf + 0x05, 0xfe);
+		cpu.write(0xaf + 0x05, 0xfe);
 		cpu.run();
 		assert_eq!(cpu.reg.x, 0xfe);
 		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
@@ -547,7 +557,7 @@ mod test {
 		cpu.load(&[0xbc, 0xaf, 0xfa, 0x00]);
 		cpu.reset();
 		cpu.reg.x = 0x05;
-		cpu.mem.write(0xfaaf + 0x05, 0xfe);
+		cpu.write(0xfaaf + 0x05, 0xfe);
 		cpu.run();
 		assert_eq!(cpu.reg.y, 0xfe);
 		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
@@ -583,8 +593,8 @@ mod test {
 		cpu.reset();
 		cpu.reg.acc = 0x0f;
 		cpu.reg.x = 0x05;
-		cpu.mem.write_u16(0xaf + 0x05, 0x4545);
-		cpu.mem.write_u16(0x4545, 0xf0);
+		cpu.write_u16(0xaf + 0x05, 0x4545);
+		cpu.write_u16(0x4545, 0xf0);
 		cpu.run();
 		assert_eq!(cpu.reg.acc, 0xff);
 		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
@@ -595,14 +605,14 @@ mod test {
 	fn pha() {
 		let mut cpu = MOS6502::new();
 		cpu.load_and_run(&[0xa9, 0xff, 0x48, 0x00]);
-		assert_eq!(cpu.mem.read(0x01ff), 0xff);
+		assert_eq!(cpu.read(0x01ff), 0xff);
 	}
 
 	#[test]
 	fn php() {
 		let mut cpu = MOS6502::new();
 		cpu.load_and_run(&[0xc9, 0x00, 0x08, 0x00]);
-		assert_eq!(cpu.mem.read(0x01ff), 0b0011_0011);
+		assert_eq!(cpu.read(0x01ff), 0b0011_0011);
 	}
 
 	#[test]
@@ -619,9 +629,9 @@ mod test {
 		cpu.load(&[0x3e, 0xc0, 0xab, 0x3e, 0xc0, 0xab, 0x00]);
 		cpu.reset();
 		cpu.reg.x = 0xd;
-		cpu.mem.write(0xabc0 + 0xd, 0b1100_1111);
+		cpu.write(0xabc0 + 0xd, 0b1100_1111);
 		cpu.run();
-		assert_eq!(cpu.mem.read(0xabc0 + 0xd), 0b0011_1111);
+		assert_eq!(cpu.read(0xabc0 + 0xd), 0b0011_1111);
 		assert!(cpu.reg.status.contains(StatusFlags::CARRY));
 		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
 		assert!(!cpu.reg.status.contains(StatusFlags::NEGATIVE));
@@ -676,7 +686,7 @@ mod test {
 		cpu.reset();
 		cpu.reg.acc = 0x50;
 		cpu.reg.x = 0x5;
-		cpu.mem.write(0xd0 + 0x5, 0xb0);
+		cpu.write(0xd0 + 0x5, 0xb0);
 		cpu.run();
 		assert_eq!(cpu.reg.acc, 0x9f);
 		assert!(!cpu.reg.status.contains(StatusFlags::CARRY));
@@ -702,7 +712,7 @@ mod test {
 		cpu.reg.acc = 0xf0;
 		cpu.reg.y = 0x10;
 		cpu.run();
-		assert_eq!(cpu.mem.read(0xabcd + 0x10), 0xf0);
+		assert_eq!(cpu.read(0xabcd + 0x10), 0xf0);
 	}
 
 	#[test]
@@ -713,8 +723,8 @@ mod test {
 		cpu.reg.x = 0xf0;
 		cpu.reg.y = 0xf1;
 		cpu.run();
-		assert_eq!(cpu.mem.read(0xabc0), 0xf0);
-		assert_eq!(cpu.mem.read(0xabc1), 0xf1);
+		assert_eq!(cpu.read(0xabc0), 0xf0);
+		assert_eq!(cpu.read(0xabc1), 0xf1);
 	}		
 
 	#[test]

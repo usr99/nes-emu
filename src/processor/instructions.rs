@@ -1,8 +1,7 @@
 use std::{collections::HashMap, num::Wrapping, ops::Add};
 
-use crate::memory::Memory;
-
-use super::{MOS6502, Registers, StatusFlags};
+use crate::memory::Mem;
+use super::{MOS6502, StatusFlags};
 
 #[repr(u8)]
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
@@ -187,7 +186,7 @@ pub fn alloc_opcode_map() -> HashMap<u8, Instruction> {
 	MOS6502_OP_CODES.into_iter().collect::<HashMap<_, _>>()
 }
 
-type OpImpl = fn(&mut Registers, &mut Memory, AddressingMode) -> Option<u16>;
+type OpImpl = fn(&mut MOS6502, AddressingMode) -> Option<u16>;
 pub(super) static MOS6502_OP_IMPLS: [OpImpl; 54] = [
 	adc, and, asl, bcc, bcs, beq, bit, bmi, bne, bpl, bvc, bvs, clc,
 	cld, cli, clv, cmp, cpx, cpy, dec, dex, dey, eor, inc, inx, iny, jmp,
@@ -195,15 +194,15 @@ pub(super) static MOS6502_OP_IMPLS: [OpImpl; 54] = [
 	rts, sbc, sec, sed, sei, sta, stx, sty, tax, tay, tsx, txa, txs, tya
 ];
 
-fn adc(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
-	let addr = get_operand_addr(reg, mem, mode);
-	let byte = mem.read(addr);
+fn adc(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
+	let addr = get_operand_addr(cpu, mode);
+	let byte = cpu.read(addr);
 
 	let mut sum = 0;
-	let mut carry = reg.status.bits() & 0b0000_0001;
+	let mut carry = cpu.reg.status.bits() & 0b0000_0001;
 
 	for shift in 0..8 {
-		let x = (reg.acc >> shift) & 1;
+		let x = (cpu.reg.acc >> shift) & 1;
 		let y = (byte >> shift) & 1;
 	
 		let xor = x ^ y;
@@ -213,463 +212,465 @@ fn adc(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u1
 		carry = (x & y) | (xor & carry);
 	}
 
-	reg.status.set(StatusFlags::CARRY, carry == 1);
+	cpu.reg.status.set(StatusFlags::CARRY, carry == 1);
 	// set the overflow flag if 2 +inputs give a -output
 	// or if 2 -inputs give a +input
-	reg.status.set(StatusFlags::OVERFLOW, ((reg.acc ^ sum) & (byte ^ sum) & 0b1000_0000) != 0);
-	reg.status.update_zero_and_neg(sum);
-	reg.acc = sum;
+	cpu.reg.status.set(StatusFlags::OVERFLOW, ((cpu.reg.acc ^ sum) & (byte ^ sum) & 0b1000_0000) != 0);
+	cpu.reg.status.update_zero_and_neg(sum);
+	cpu.reg.acc = sum;
 
 	None
 }
 
-fn and(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
-	let addr = get_operand_addr(reg, mem, mode);
-	reg.acc &= mem.read(addr);
-	reg.status.update_zero_and_neg(reg.x);
+fn and(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
+	let addr = get_operand_addr(cpu, mode);
+	cpu.reg.acc &= cpu.read(addr);
+	cpu.reg.status.update_zero_and_neg(cpu.reg.x);
 
 	None
 }
 
-fn asl(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
+fn asl(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
 	let old;
 	let new;
 
 	if let AddressingMode::None = mode {
-		old = reg.acc;
+		old = cpu.reg.acc;
 		new = old << 1;
-		reg.acc = new;
+		cpu.reg.acc = new;
 	} else {
-		let addr = get_operand_addr(reg, mem, mode);
-		old = mem.read(addr);
+		let addr = get_operand_addr(cpu, mode);
+		old = cpu.read(addr);
 		new = old << 1;
-		mem.write(addr, new);
+		cpu.write(addr, new);
 	}
 
-	reg.status.set(super::StatusFlags::CARRY, old & 0b1000_0000 != 0);
-	reg.status.update_zero_and_neg(new);
+	cpu.reg.status.set(super::StatusFlags::CARRY, old & 0b1000_0000 != 0);
+	cpu.reg.status.update_zero_and_neg(new);
 
 	None
 }
 
-fn bcc(reg: &mut Registers, mem: &mut Memory, _: AddressingMode) -> Option<u16> {
-	relative_branch(reg, mem, !reg.status.contains(StatusFlags::CARRY))
+fn bcc(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
+	relative_branch(cpu, !cpu.reg.status.contains(StatusFlags::CARRY))
 }
 
-fn bcs(reg: &mut Registers, mem: &mut Memory, _: AddressingMode) -> Option<u16> {
-	relative_branch(reg, mem, reg.status.contains(StatusFlags::CARRY))
+fn bcs(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
+	relative_branch(cpu, cpu.reg.status.contains(StatusFlags::CARRY))
 }
 
-fn beq(reg: &mut Registers, mem: &mut Memory, _: AddressingMode) -> Option<u16> {
-	relative_branch(reg, mem, reg.status.contains(StatusFlags::ZERO))
+fn beq(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
+	relative_branch(cpu, cpu.reg.status.contains(StatusFlags::ZERO))
 }
 
-fn bit(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
-	let addr = get_operand_addr(reg, mem, mode);
-	let byte = mem.read(addr);
-	let res = byte & reg.acc;
+fn bit(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
+	let addr = get_operand_addr(cpu, mode);
+	let byte = cpu.read(addr);
+	let res = byte & cpu.reg.acc;
 
-	reg.status.set(StatusFlags::ZERO, res == 0);
-	reg.status.set(StatusFlags::OVERFLOW, byte & 0b0100_0000 != 0);
-	reg.status.set(StatusFlags::NEGATIVE, byte & 0b1000_0000 != 0);
+	cpu.reg.status.set(StatusFlags::ZERO, res == 0);
+	cpu.reg.status.set(StatusFlags::OVERFLOW, byte & 0b0100_0000 != 0);
+	cpu.reg.status.set(StatusFlags::NEGATIVE, byte & 0b1000_0000 != 0);
 
 	None
 }
 
-fn bmi(reg: &mut Registers, mem: &mut Memory, _: AddressingMode) -> Option<u16> {
-	relative_branch(reg, mem, reg.status.contains(StatusFlags::NEGATIVE))
+fn bmi(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
+	relative_branch(cpu, cpu.reg.status.contains(StatusFlags::NEGATIVE))
 }
 
-fn bne(reg: &mut Registers, mem: &mut Memory, _: AddressingMode) -> Option<u16> {
-	relative_branch(reg, mem, !reg.status.contains(StatusFlags::ZERO))
+fn bne(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
+	relative_branch(cpu, !cpu.reg.status.contains(StatusFlags::ZERO))
 }
 
-fn bpl(reg: &mut Registers, mem: &mut Memory, _: AddressingMode) -> Option<u16> {
-	relative_branch(reg, mem, !reg.status.contains(StatusFlags::NEGATIVE))
+fn bpl(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
+	relative_branch(cpu, !cpu.reg.status.contains(StatusFlags::NEGATIVE))
 }
 
-fn bvc(reg: &mut Registers, mem: &mut Memory, _: AddressingMode) -> Option<u16> {
-	relative_branch(reg, mem, !reg.status.contains(StatusFlags::OVERFLOW))
+fn bvc(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
+	relative_branch(cpu, !cpu.reg.status.contains(StatusFlags::OVERFLOW))
 }
 
-fn bvs(reg: &mut Registers, mem: &mut Memory, _: AddressingMode) -> Option<u16> {
-	relative_branch(reg, mem, reg.status.contains(StatusFlags::OVERFLOW))
+fn bvs(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
+	relative_branch(cpu, cpu.reg.status.contains(StatusFlags::OVERFLOW))
 }
 
-fn clc(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
-	reg.status.remove(StatusFlags::CARRY);
+fn clc(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
+	cpu.reg.status.remove(StatusFlags::CARRY);
 	None
 }
 
-fn cld(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
-	reg.status.remove(StatusFlags::DECIMAL_MODE);
+fn cld(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
+	cpu.reg.status.remove(StatusFlags::DECIMAL_MODE);
 	None
 }
 
-fn cli(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
-	reg.status.remove(StatusFlags::INTERRUPT_DISABLE);
+fn cli(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
+	cpu.reg.status.remove(StatusFlags::INTERRUPT_DISABLE);
 	None
 }
 
-fn clv(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
-	reg.status.remove(StatusFlags::OVERFLOW);
+fn clv(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
+	cpu.reg.status.remove(StatusFlags::OVERFLOW);
 	None
 }
 
-fn cmp(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
-	let addr = get_operand_addr(reg, mem, mode);
-	compare(&mut reg.status, reg.acc, mem.read(addr));
-
-	None
-}
-
-fn cpx(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
-	let addr = get_operand_addr(reg, mem, mode);
-	compare(&mut reg.status, reg.x, mem.read(addr));
+fn cmp(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
+	let addr = get_operand_addr(cpu, mode);
+	compare(cpu, cpu.reg.acc, addr);
 
 	None
 }
 
-fn cpy(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
-	let addr = get_operand_addr(reg, mem, mode);
-	compare(&mut reg.status, reg.y, mem.read(addr));
+fn cpx(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
+	let addr = get_operand_addr(cpu, mode);
+	compare(cpu, cpu.reg.x, addr);
 
 	None
 }
 
-fn dec(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
-	let addr = get_operand_addr(reg, mem, mode);
-	let new = mem.read(addr).wrapping_sub(1);
-	mem.write(addr, new);
-	reg.status.update_zero_and_neg(new);
+fn cpy(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
+	let addr = get_operand_addr(cpu, mode);
+	compare(cpu, cpu.reg.y, addr);
+
+	None
+}
+
+fn dec(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
+	let addr = get_operand_addr(cpu, mode);
+	let new = cpu.read(addr).wrapping_sub(1);
+	cpu.write(addr, new);
+	cpu.reg.status.update_zero_and_neg(new);
 	
 	None
 }
 
-fn dex(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
-	reg.x = reg.x.wrapping_sub(1);
-	reg.status.update_zero_and_neg(reg.x);
+fn dex(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
+	cpu.reg.x = cpu.reg.x.wrapping_sub(1);
+	cpu.reg.status.update_zero_and_neg(cpu.reg.x);
 	
 	None
 }
 
-fn dey(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
-	reg.y = reg.y.wrapping_sub(1);
-	reg.status.update_zero_and_neg(reg.y);
+fn dey(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
+	cpu.reg.y = cpu.reg.y.wrapping_sub(1);
+	cpu.reg.status.update_zero_and_neg(cpu.reg.y);
 	
 	None
 }
 
-fn eor(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
-	let addr = get_operand_addr(reg, mem, mode);
-	reg.acc ^= mem.read(addr);
-	reg.status.update_zero_and_neg(reg.acc);
+fn eor(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
+	let addr = get_operand_addr(cpu, mode);
+	cpu.reg.acc ^= cpu.read(addr);
+	cpu.reg.status.update_zero_and_neg(cpu.reg.acc);
 
 	None
 }
 
-fn inc(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
-	let addr = get_operand_addr(reg, mem, mode);
-	let new = mem.read(addr).wrapping_add(1);
-	mem.write(addr, new);
-	reg.status.update_zero_and_neg(new);
+fn inc(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
+	let addr = get_operand_addr(cpu, mode);
+	let new = cpu.read(addr).wrapping_add(1);
+	cpu.write(addr, new);
+	cpu.reg.status.update_zero_and_neg(new);
 	
 	None
 }
 
-fn inx(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
-	reg.x = reg.x.wrapping_add(1);
-	reg.status.update_zero_and_neg(reg.x);
+fn inx(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
+	cpu.reg.x = cpu.reg.x.wrapping_add(1);
+	cpu.reg.status.update_zero_and_neg(cpu.reg.x);
 
 	None
 }
 
-fn iny(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
-	reg.y = reg.y.wrapping_add(1);
-	reg.status.update_zero_and_neg(reg.y);
+fn iny(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
+	cpu.reg.y = cpu.reg.y.wrapping_add(1);
+	cpu.reg.status.update_zero_and_neg(cpu.reg.y);
 
 	None
 }
 
-fn jmp(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
-	let addr = get_operand_addr(reg, mem, mode);
+fn jmp(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
+	let addr = get_operand_addr(cpu, mode);
 
 	Some(addr)
 }
 
-fn jsr(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
-	let addr = get_operand_addr(reg, mem, mode);
-	mem.write_u16(0x0100 + reg.sp as u16 - 1, reg.pc + 1);
-	reg.sp -= 2;
+fn jsr(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
+	let addr = get_operand_addr(cpu, mode);
+	cpu.write_u16(0x0100 + cpu.reg.sp as u16 - 1, cpu.reg.pc + 1);
+	cpu.reg.sp -= 2;
 
 	Some(addr)
 }
 
-fn lda(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
-	let addr = get_operand_addr(reg, mem, mode);
-	reg.acc = mem.read(addr);
-	reg.status.update_zero_and_neg(reg.acc);
+fn lda(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
+	let addr = get_operand_addr(cpu, mode);
+	cpu.reg.acc = cpu.read(addr);
+	cpu.reg.status.update_zero_and_neg(cpu.reg.acc);
 
 	None
 }
 
-fn ldx(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
-	let addr = get_operand_addr(reg, mem, mode);
-	reg.x = mem.read(addr);
-	reg.status.update_zero_and_neg(reg.x);
+fn ldx(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
+	let addr = get_operand_addr(cpu, mode);
+	cpu.reg.x = cpu.read(addr);
+	cpu.reg.status.update_zero_and_neg(cpu.reg.x);
 
 	None
 }
 
-fn ldy(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
-	let addr = get_operand_addr(reg, mem, mode);
-	reg.y = mem.read(addr);
-	reg.status.update_zero_and_neg(reg.y);
+fn ldy(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
+	let addr = get_operand_addr(cpu, mode);
+	cpu.reg.y = cpu.read(addr);
+	cpu.reg.status.update_zero_and_neg(cpu.reg.y);
 
 	None
 }
 
-fn lsr(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
+fn lsr(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
 	let old;
 	let new;
 
 	if let AddressingMode::None = mode {
-		old = reg.acc;
+		old = cpu.reg.acc;
 		new = old >> 1;
-		reg.acc = new;
+		cpu.reg.acc = new;
 	} else {
-		let addr = get_operand_addr(reg, mem, mode);
-		old = mem.read(addr);
+		let addr = get_operand_addr(cpu, mode);
+		old = cpu.read(addr);
 		new = old >> 1;
-		mem.write(addr, new);
+		cpu.write(addr, new);
 	}
 
-	reg.status.set(super::StatusFlags::CARRY, old & 0b0000_0001 != 0);
-	reg.status.update_zero_and_neg(new);
+	cpu.reg.status.set(super::StatusFlags::CARRY, old & 0b0000_0001 != 0);
+	cpu.reg.status.update_zero_and_neg(new);
 
 	None
 }
 
-fn nop(_: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
+fn nop(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
 	None
 }
 
-fn ora(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
-	let addr = get_operand_addr(reg, mem, mode);
-	reg.acc |= mem.read(addr);
-	reg.status.update_zero_and_neg(reg.acc);
+fn ora(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
+	let addr = get_operand_addr(cpu, mode);
+	cpu.reg.acc |= cpu.read(addr);
+	cpu.reg.status.update_zero_and_neg(cpu.reg.acc);
 	
 	None
 }
 
-fn pha(reg: &mut Registers, mem: &mut Memory, _: AddressingMode) -> Option<u16> {
-	mem.write(0x0100 + reg.sp as u16, reg.acc);
-	reg.sp -= 1;
+fn pha(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
+	cpu.write(0x0100 + cpu.reg.sp as u16, cpu.reg.acc);
+	cpu.reg.sp -= 1;
 
 	None
 }
 
-fn php(reg: &mut Registers, mem: &mut Memory, _: AddressingMode) -> Option<u16> {
-	let cpy = reg.status | StatusFlags::BREAK_COMMAND;
-	mem.write(0x0100 + reg.sp as u16, cpy.bits());
-	reg.sp -= 1;
+fn php(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
+	let cpy = cpu.reg.status | StatusFlags::BREAK_COMMAND;
+	cpu.write(0x0100 + cpu.reg.sp as u16, cpy.bits());
+	cpu.reg.sp -= 1;
 
 	None
 }
 
-fn pla(reg: &mut Registers, mem: &mut Memory, _: AddressingMode) -> Option<u16> {
-	reg.sp += 1;
-	reg.acc = mem.read(0x0100 + reg.sp as u16);
-	reg.status.update_zero_and_neg(reg.acc);
+fn pla(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
+	cpu.reg.sp += 1;
+	cpu.reg.acc = cpu.read(0x0100 + cpu.reg.sp as u16);
+	cpu.reg.status.update_zero_and_neg(cpu.reg.acc);
 
 	None
 }
 
-fn plp(reg: &mut Registers, mem: &mut Memory, _: AddressingMode) -> Option<u16> {
-	reg.sp += 1;
-	let byte = mem.read(0x0100 + reg.sp as u16);
-	reg.status = StatusFlags::from_bits(byte).unwrap();
-	reg.status.remove(StatusFlags::BREAK_COMMAND);
+fn plp(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
+	cpu.reg.sp += 1;
+	let byte = cpu.read(0x0100 + cpu.reg.sp as u16);
+	cpu.reg.status = StatusFlags::from_bits(byte).unwrap();
+	cpu.reg.status.remove(StatusFlags::BREAK_COMMAND);
 
 	None
 }
 
-fn rol(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
+fn rol(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
 	let old;
 	let new;
 
 	if let AddressingMode::None = mode {
-		old = reg.acc;
+		old = cpu.reg.acc;
 		new = old.rotate_left(1);
-		reg.acc = new;
+		cpu.reg.acc = new;
 	} else {
-		let addr = get_operand_addr(reg, mem, mode);
-		old = mem.read(addr);
+		let addr = get_operand_addr(cpu, mode);
+		old = cpu.read(addr);
 		new = old.rotate_left(1);
-		mem.write(addr, new);
+		cpu.write(addr, new);
 	}
 
-	reg.status.set(StatusFlags::CARRY, old & 0b1000_0000 != 0);
-	reg.status.update_zero_and_neg(new);
+	cpu.reg.status.set(StatusFlags::CARRY, old & 0b1000_0000 != 0);
+	cpu.reg.status.update_zero_and_neg(new);
 
 	None
 }
 
-fn ror(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
+fn ror(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
 	let old;
 	let new;
 
 	if let AddressingMode::None = mode {
-		old = reg.acc;
+		old = cpu.reg.acc;
 		new = old.rotate_right(1);
-		reg.acc = new;
+		cpu.reg.acc = new;
 	} else {
-		let addr = get_operand_addr(reg, mem, mode);
-		old = mem.read(addr);
+		let addr = get_operand_addr(cpu, mode);
+		old = cpu.read(addr);
 		new = old.rotate_right(1);
-		mem.write(addr, new);
+		cpu.write(addr, new);
 	}
 
-	reg.status.set(StatusFlags::CARRY, old & 0b1000_0000 != 0);
-	reg.status.update_zero_and_neg(new);
+	cpu.reg.status.set(StatusFlags::CARRY, old & 0b1000_0000 != 0);
+	cpu.reg.status.update_zero_and_neg(new);
 
 	None
 }
 
-fn rts(reg: &mut Registers, mem: &mut Memory, _: AddressingMode) -> Option<u16> {
-	let addr = mem.read_u16(0x0100 + reg.sp as u16 + 1);
-	reg.sp += 2;
+fn rts(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
+	let addr = cpu.read_u16(0x0100 + cpu.reg.sp as u16 + 1);
+	cpu.reg.sp += 2;
 
 	Some(addr.wrapping_add(1))
 }
 
-fn sbc(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
-	let addr = get_operand_addr(reg, mem, mode);
-	let byte = mem.read(addr);
+fn sbc(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
+	let addr = get_operand_addr(cpu, mode);
+	let byte = cpu.read(addr);
 
 	// M - N - B <=> M + !N + C
-	mem.write(addr, !byte);
-	adc(reg, mem, mode);
-	mem.write(addr, byte); // restore byte
+	cpu.write(addr, !byte);
+	adc(cpu, mode);
+	cpu.write(addr, byte); // restore byte
 
 	None
 }
 
-fn sec(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
-	reg.status |= StatusFlags::CARRY;
+fn sec(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
+	cpu.reg.status |= StatusFlags::CARRY;
 	None
 }
 
-fn sed(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
-	reg.status |= StatusFlags::DECIMAL_MODE;
+fn sed(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
+	cpu.reg.status |= StatusFlags::DECIMAL_MODE;
 	None
 }
 
-fn sei(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
-	reg.status |= StatusFlags::INTERRUPT_DISABLE;
+fn sei(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
+	cpu.reg.status |= StatusFlags::INTERRUPT_DISABLE;
 	None
 }
 
-fn sta(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
-	let addr = get_operand_addr(reg, mem, mode);
-	mem.write(addr, reg.acc);
-
-	None
-}
-
-fn stx(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
-	let addr = get_operand_addr(reg, mem, mode);
-	mem.write(addr, reg.x);
+fn sta(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
+	let addr = get_operand_addr(cpu, mode);
+	cpu.write(addr, cpu.reg.acc);
 
 	None
 }
 
-fn sty(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> Option<u16> {
-	let addr = get_operand_addr(reg, mem, mode);
-	mem.write(addr, reg.y);
+fn stx(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
+	let addr = get_operand_addr(cpu, mode);
+	cpu.write(addr, cpu.reg.x);
 
 	None
 }
 
-fn tax(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
-	reg.x = reg.acc;
-	reg.status.update_zero_and_neg(reg.x);
+fn sty(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
+	let addr = get_operand_addr(cpu, mode);
+	cpu.write(addr, cpu.reg.y);
 
 	None
 }
 
-fn tay(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
-	reg.y = reg.acc;
-	reg.status.update_zero_and_neg(reg.y);
+fn tax(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
+	cpu.reg.x = cpu.reg.acc;
+	cpu.reg.status.update_zero_and_neg(cpu.reg.x);
 
 	None
 }
 
-fn tsx(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
-	reg.x = reg.sp;
-	reg.status.update_zero_and_neg(reg.x);
+fn tay(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
+	cpu.reg.y = cpu.reg.acc;
+	cpu.reg.status.update_zero_and_neg(cpu.reg.y);
 
 	None
 }
 
-fn txa(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
-	reg.acc = reg.x;
-	reg.status.update_zero_and_neg(reg.acc);
+fn tsx(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
+	cpu.reg.x = cpu.reg.sp;
+	cpu.reg.status.update_zero_and_neg(cpu.reg.x);
 
 	None
 }
 
-fn txs(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
-	reg.sp = reg.x;
-	reg.status.update_zero_and_neg(reg.sp);
+fn txa(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
+	cpu.reg.acc = cpu.reg.x;
+	cpu.reg.status.update_zero_and_neg(cpu.reg.acc);
 
 	None
 }
 
-fn tya(reg: &mut Registers, _: &mut Memory, _: AddressingMode) -> Option<u16> {
-	reg.acc = reg.y;
-	reg.status.update_zero_and_neg(reg.acc);
+fn txs(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
+	cpu.reg.sp = cpu.reg.x;
+	cpu.reg.status.update_zero_and_neg(cpu.reg.sp);
 
 	None
 }
 
-fn relative_branch(reg: &mut Registers, mem: &mut Memory, condition: bool) -> Option<u16> {
+fn tya(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
+	cpu.reg.acc = cpu.reg.y;
+	cpu.reg.status.update_zero_and_neg(cpu.reg.acc);
+
+	None
+}
+
+fn relative_branch(cpu: &mut MOS6502, condition: bool) -> Option<u16> {
 	return match condition {
 		true => {
-			let byte = mem.read(reg.pc) as i8;
+			let byte = cpu.read(cpu.reg.pc) as i8;
 
-			Some(reg.pc.wrapping_add(byte as u16).wrapping_add(1))
+			Some(cpu.reg.pc.wrapping_add(byte as u16).wrapping_add(1))
 		},
 		false => None
 	};
 }
 
-fn compare(status: &mut StatusFlags, reg: u8, byte: u8) {
-	status.set(StatusFlags::CARRY, reg >= byte);
-	status.set(StatusFlags::ZERO, reg == byte);
-	status.set(StatusFlags::NEGATIVE, reg < byte);
+fn compare(cpu: &mut MOS6502, reg: u8, addr: u16) {
+	let byte = cpu.read(addr);
+
+	cpu.reg.status.set(StatusFlags::CARRY, reg >= byte);
+	cpu.reg.status.set(StatusFlags::ZERO, reg == byte);
+	cpu.reg.status.set(StatusFlags::NEGATIVE, reg < byte);
 }
 
-fn get_operand_addr(reg: &mut Registers, mem: &mut Memory, mode: AddressingMode) -> u16 {
+fn get_operand_addr(cpu: &mut MOS6502, mode: AddressingMode) -> u16 {
 	match mode {
-		AddressingMode::Immediate => reg.pc,
-		AddressingMode::ZeroPage => mem.read(reg.pc) as u16,
-		AddressingMode::ZeroPageX => (mem.read(reg.pc).wrapping_add(reg.x)) as u16,
-		AddressingMode::ZeroPageY => (mem.read(reg.pc).wrapping_add(reg.y)) as u16,
-		AddressingMode::Absolute => mem.read_u16(reg.pc),
-		AddressingMode::AbsoluteX => mem.read_u16(reg.pc).wrapping_add(reg.x as u16),
-		AddressingMode::AbsoluteY => mem.read_u16(reg.pc).wrapping_add(reg.y as u16),
+		AddressingMode::Immediate => cpu.reg.pc,
+		AddressingMode::ZeroPage => cpu.read(cpu.reg.pc) as u16,
+		AddressingMode::ZeroPageX => (cpu.read(cpu.reg.pc).wrapping_add(cpu.reg.x)) as u16,
+		AddressingMode::ZeroPageY => (cpu.read(cpu.reg.pc).wrapping_add(cpu.reg.y)) as u16,
+		AddressingMode::Absolute => cpu.read_u16(cpu.reg.pc),
+		AddressingMode::AbsoluteX => cpu.read_u16(cpu.reg.pc).wrapping_add(cpu.reg.x as u16),
+		AddressingMode::AbsoluteY => cpu.read_u16(cpu.reg.pc).wrapping_add(cpu.reg.y as u16),
 		AddressingMode::Indirect => {
-			let addr = mem.read_u16(reg.pc);
-			mem.read_u16(addr)
+			let addr = cpu.read_u16(cpu.reg.pc);
+			cpu.read_u16(addr)
 		},
 		AddressingMode::IndirectX => {
-			let addr = mem.read(reg.pc);
-			mem.read_u16(addr.wrapping_add(reg.x) as u16)
+			let addr = cpu.read(cpu.reg.pc);
+			cpu.read_u16(addr.wrapping_add(cpu.reg.x) as u16)
 		},
 		AddressingMode::IndirectY => {
-			let addr = mem.read(reg.pc);
-			mem.read_u16(addr as u16).wrapping_add(reg.y as u16)
+			let addr = cpu.read(cpu.reg.pc);
+			cpu.read_u16(addr as u16).wrapping_add(cpu.reg.y as u16)
 		},
 		AddressingMode::None => panic!("no operand")
 	}
