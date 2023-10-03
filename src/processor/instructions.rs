@@ -197,27 +197,7 @@ pub(super) static MOS6502_OP_IMPLS: [OpImpl; 54] = [
 fn adc(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
 	let addr = get_operand_addr(cpu, mode);
 	let byte = cpu.read(addr);
-
-	let mut sum = 0;
-	let mut carry = cpu.reg.status.bits() & 0b0000_0001;
-
-	for shift in 0..8 {
-		let x = (cpu.reg.acc >> shift) & 1;
-		let y = (byte >> shift) & 1;
-	
-		let xor = x ^ y;
-		let res = xor ^ carry;
-
-		sum = (res << shift) | sum;
-		carry = (x & y) | (xor & carry);
-	}
-
-	cpu.reg.status.set(StatusFlags::CARRY, carry == 1);
-	// set the overflow flag if 2 +inputs give a -output
-	// or if 2 -inputs give a +input
-	cpu.reg.status.set(StatusFlags::OVERFLOW, ((cpu.reg.acc ^ sum) & (byte ^ sum) & 0b1000_0000) != 0);
-	cpu.reg.status.update_zero_and_neg(sum);
-	cpu.reg.acc = sum;
+	add_with_carry(cpu, byte);
 
 	None
 }
@@ -231,22 +211,10 @@ fn and(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
 }
 
 fn asl(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
-	let old;
-	let new;
-
-	if let AddressingMode::None = mode {
-		old = cpu.reg.acc;
-		new = old << 1;
-		cpu.reg.acc = new;
-	} else {
-		let addr = get_operand_addr(cpu, mode);
-		old = cpu.read(addr);
-		new = old << 1;
-		cpu.write(addr, new);
-	}
-
-	cpu.reg.status.set(super::StatusFlags::CARRY, old & 0b1000_0000 != 0);
-	cpu.reg.status.update_zero_and_neg(new);
+	bitwise_shift_or_rotate(cpu, mode, |status, value| {
+		status.set(StatusFlags::CARRY, value & 0b1000_0000 != 0);
+		value << 1
+	});
 
 	None
 }
@@ -429,23 +397,11 @@ fn ldy(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
 }
 
 fn lsr(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
-	let old;
-	let new;
-
-	if let AddressingMode::None = mode {
-		old = cpu.reg.acc;
-		new = old >> 1;
-		cpu.reg.acc = new;
-	} else {
-		let addr = get_operand_addr(cpu, mode);
-		old = cpu.read(addr);
-		new = old >> 1;
-		cpu.write(addr, new);
-	}
-
-	cpu.reg.status.set(super::StatusFlags::CARRY, old & 0b0000_0001 != 0);
-	cpu.reg.status.update_zero_and_neg(new);
-
+	bitwise_shift_or_rotate(cpu, mode, |status, value| {
+		status.set(StatusFlags::CARRY, value & 0b0000_0001 != 0);
+		value >> 1
+	});
+	
 	None
 }
 
@@ -494,43 +450,19 @@ fn plp(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
 }
 
 fn rol(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
-	let old;
-	let new;
-
-	if let AddressingMode::None = mode {
-		old = cpu.reg.acc;
-		new = old.rotate_left(1);
-		cpu.reg.acc = new;
-	} else {
-		let addr = get_operand_addr(cpu, mode);
-		old = cpu.read(addr);
-		new = old.rotate_left(1);
-		cpu.write(addr, new);
-	}
-
-	cpu.reg.status.set(StatusFlags::CARRY, old & 0b1000_0000 != 0);
-	cpu.reg.status.update_zero_and_neg(new);
+	bitwise_shift_or_rotate(cpu, mode, |status, value| {
+		status.set(StatusFlags::CARRY, value & 0b1000_0000 != 0);
+		value.rotate_left(1)
+	});
 
 	None
 }
 
 fn ror(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
-	let old;
-	let new;
-
-	if let AddressingMode::None = mode {
-		old = cpu.reg.acc;
-		new = old.rotate_right(1);
-		cpu.reg.acc = new;
-	} else {
-		let addr = get_operand_addr(cpu, mode);
-		old = cpu.read(addr);
-		new = old.rotate_right(1);
-		cpu.write(addr, new);
-	}
-
-	cpu.reg.status.set(StatusFlags::CARRY, old & 0b1000_0000 != 0);
-	cpu.reg.status.update_zero_and_neg(new);
+	bitwise_shift_or_rotate(cpu, mode, |status, value| {
+		status.set(StatusFlags::CARRY, value & 0b0000_0001 != 0);
+		value.rotate_right(1)
+	});
 
 	None
 }
@@ -545,11 +477,7 @@ fn rts(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
 fn sbc(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
 	let addr = get_operand_addr(cpu, mode);
 	let byte = cpu.read(addr);
-
-	// M - N - B <=> M + !N + C
-	cpu.write(addr, !byte);
-	adc(cpu, mode);
-	cpu.write(addr, byte); // restore byte
+	add_with_carry(cpu, !byte); // M - N - B <=> M + !N + C
 
 	None
 }
@@ -630,6 +558,49 @@ fn tya(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
 	cpu.reg.status.update_zero_and_neg(cpu.reg.acc);
 
 	None
+}
+
+fn add_with_carry(cpu: &mut MOS6502, byte: u8) {
+	let mut sum = 0;
+	let mut carry = cpu.reg.status.bits() & 0b0000_0001;
+
+	for shift in 0..8 {
+		let x = (cpu.reg.acc >> shift) & 1;
+		let y = (byte >> shift) & 1;
+	
+		let xor = x ^ y;
+		let res = xor ^ carry;
+
+		sum = (res << shift) | sum;
+		carry = (x & y) | (xor & carry);
+	}
+
+	cpu.reg.status.set(StatusFlags::CARRY, carry == 1);
+	// set the overflow flag if 2 +inputs give a -output
+	// or if 2 -inputs give a +input
+	cpu.reg.status.set(StatusFlags::OVERFLOW, ((cpu.reg.acc ^ sum) & (byte ^ sum) & 0b1000_0000) != 0);
+	cpu.reg.status.update_zero_and_neg(sum);
+	cpu.reg.acc = sum;
+}
+
+fn bitwise_shift_or_rotate<F>(cpu: &mut MOS6502, mode: AddressingMode, op: F)
+	where F: Fn(&mut StatusFlags, u8) -> u8
+{
+	let old;
+	let new;
+
+	if let AddressingMode::None = mode {
+		old = cpu.reg.acc;
+		new = op(&mut cpu.reg.status, old);
+		cpu.reg.acc = new;
+	} else {
+		let addr = get_operand_addr(cpu, mode);
+		old = cpu.read(addr);
+		new = op(&mut cpu.reg.status, old);
+		cpu.write(addr, new);
+	}
+
+	cpu.reg.status.update_zero_and_neg(new);
 }
 
 fn relative_branch(cpu: &mut MOS6502, condition: bool) -> Option<u16> {
