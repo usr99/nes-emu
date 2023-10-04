@@ -1160,6 +1160,7 @@ mod test {
 		let mut cpu = MOS6502::new();
 		cpu.__test__load_and_run(&[0xa9, 0xff, 0x48, 0x00]);
 		assert_eq!(cpu.read(0x01ff), 0xff);
+		assert_eq!(cpu.reg.sp, 0xfe);
 	}
 
 	#[test]
@@ -1185,11 +1186,13 @@ mod test {
 		cpu.reg.x = 0xd;
 		cpu.write(0xc0 + 0xd, 0b1100_1111);
 		cpu.run();
-		assert_eq!(cpu.read(0xc0 + 0xd), 0b0011_1111);
+		assert_eq!(cpu.read(0xc0 + 0xd), 0b0011_1101);
 		assert!(cpu.reg.status.contains(StatusFlags::CARRY));
 		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
 		assert!(!cpu.reg.status.contains(StatusFlags::NEGATIVE));
 	}
+
+	
 
 	#[test]
 	fn ror_carry_in() {
