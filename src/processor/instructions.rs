@@ -652,12 +652,18 @@ fn get_operand_addr(cpu: &mut MOS6502, mode: AddressingMode) -> u16 {
 			cpu.read_u16(addr)
 		},
 		AddressingMode::IndirectX => {
-			let addr = cpu.read(cpu.reg.pc);
-			cpu.read_u16(addr.wrapping_add(cpu.reg.x) as u16)
+			let addr = cpu.read(cpu.reg.pc).wrapping_add(cpu.reg.x);
+			let lo = cpu.read(addr as u16) as u16;
+			let hi = cpu.read(addr.wrapping_add(1) as u16) as u16;
+
+			(hi << 8) | lo
 		},
 		AddressingMode::IndirectY => {
 			let addr = cpu.read(cpu.reg.pc);
-			cpu.read_u16(addr as u16).wrapping_add(cpu.reg.y as u16)
+			let lo = cpu.read(addr as u16) as u16;
+			let hi = cpu.read(addr.wrapping_add(1) as u16) as u16;
+
+			((hi << 8) | lo).wrapping_add(cpu.reg.y as u16)
 		},
 		AddressingMode::Accumulator | AddressingMode::None => panic!("no operand")
 	}
@@ -1135,12 +1141,14 @@ mod test {
 	#[test]
 	fn ora_indirect_x() {
 		let mut cpu = MOS6502::new();
-		cpu.bus.__test__load_program(&[0x01, 0xaf, 0x00]);
+		cpu.bus.__test__load_program(&[0x01, 0xfe, 0x00]);
 		cpu.reset();
 		cpu.reg.acc = 0x0f;
-		cpu.reg.x = 0x05;
-		cpu.write_u16(0xaf + 0x05, 0x45);
-		cpu.write_u16(0x45, 0xf0);
+		cpu.reg.x = 0x01;
+		cpu.write(0xff, 0x45);
+		cpu.write(0x00, 0x02);
+		cpu.write(0x0100, 0x16); // make sure this byte is never read
+		cpu.write_u16(0x0245, 0xf0);
 		cpu.run();
 		assert_eq!(cpu.reg.acc, 0xff);
 		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
