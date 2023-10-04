@@ -17,6 +17,18 @@ pub trait Mem {
 		self.write(addr, (value & 0xFF) as u8);
 		self.write(addr.wrapping_add(1), (value >> 8) as u8);
 	}
+
+	fn read_u16_zeropage(&self, addr: u8) -> u16 {
+		let lo = self.read(addr as u16) as u16;
+		let hi = self.read(addr.wrapping_add(1) as u16) as u16;
+
+		hi << 8 | lo
+	}
+
+	fn write_u16_zeropage(&mut self, addr: u8, value: u16) {
+		self.write(addr as u16, (value & 0xFF) as u8);
+		self.write(addr.wrapping_add(1) as u16, (value >> 8) as u8);
+	}
 }
 
 const RAM: u16 = 0x0000;

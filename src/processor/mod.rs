@@ -66,9 +66,19 @@ impl MOS6502 {
 	pub fn reset(&mut self) {
 		self.reg.acc = 0;
 		self.reg.x = 0;
-		self.reg.status = StatusFlags::UNUSED | StatusFlags::INTERRUPT_DISABLE;
-		self.reg.sp = 0xfd;
-		self.reg.pc = 0xC000;
+
+		const TEST: bool = true;
+
+		if !TEST {
+			self.reg.status = StatusFlags::UNUSED | StatusFlags::INTERRUPT_DISABLE;
+			self.reg.sp = 0xfd;
+			self.reg.pc = 0xC000;
+		} else {
+			self.reg.status = StatusFlags::UNUSED;
+			self.reg.sp = 0xff;
+			self.reg.pc = 0x8000;
+
+		}
 	}
 
 	pub fn load_rom(&mut self, rom: Rom) {

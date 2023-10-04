@@ -653,17 +653,11 @@ fn get_operand_addr(cpu: &mut MOS6502, mode: AddressingMode) -> u16 {
 		},
 		AddressingMode::IndirectX => {
 			let addr = cpu.read(cpu.reg.pc).wrapping_add(cpu.reg.x);
-			let lo = cpu.read(addr as u16) as u16;
-			let hi = cpu.read(addr.wrapping_add(1) as u16) as u16;
-
-			(hi << 8) | lo
+			cpu.read_u16_zeropage(addr)
 		},
 		AddressingMode::IndirectY => {
 			let addr = cpu.read(cpu.reg.pc);
-			let lo = cpu.read(addr as u16) as u16;
-			let hi = cpu.read(addr.wrapping_add(1) as u16) as u16;
-
-			((hi << 8) | lo).wrapping_add(cpu.reg.y as u16)
+			cpu.read_u16_zeropage(addr).wrapping_add(cpu.reg.y as u16)
 		},
 		AddressingMode::Accumulator | AddressingMode::None => panic!("no operand")
 	}
