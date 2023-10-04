@@ -8,7 +8,7 @@ use super::{MOS6502, StatusFlags};
 pub enum Operation {
 	ADC, AND, ASL, BCC, BCS, BEQ, BIT, BMI, BNE, BPL, /* BRK, */ BVC, BVS, CLC,
 	CLD, CLI, CLV, CMP, CPX, CPY, DEC, DEX, DEY, EOR, INC, INX, INY, JMP,
-	JSR, LDA, LDX, LDY, LSR, NOP, ORA, PHA, PHP, PLA, PLP, ROL, ROR, /* RTI, */
+	JSR, LDA, LDX, LDY, LSR, NOP, ORA, PHA, PHP, PLA, PLP, ROL, ROR, RTI,
 	RTS, SBC, SEC, SED, SEI, STA, STX, STY, TAX, TAY, TSX, TXA, TXS, TYA
 }
 
@@ -24,13 +24,14 @@ pub enum AddressingMode {
 	Indirect,
 	IndirectX,
 	IndirectY,
+	Accumulator, // used for ASL / ASR / ROL / ROR
 	None
 }
 
 #[derive(Clone, Copy, Debug)]
 pub struct Instruction(pub Operation, pub AddressingMode, pub u8);
 
-static MOS6502_OP_CODES: [(u8, Instruction); 149] = [
+static MOS6502_OP_CODES: [(u8, Instruction); 150] = [
 	(0x69, Instruction(Operation::ADC, AddressingMode::Immediate, 2)),
 	(0x65, Instruction(Operation::ADC, AddressingMode::ZeroPage, 2)),
 	(0x75, Instruction(Operation::ADC, AddressingMode::ZeroPageX, 2)),
@@ -47,7 +48,7 @@ static MOS6502_OP_CODES: [(u8, Instruction); 149] = [
 	(0x39, Instruction(Operation::AND, AddressingMode::AbsoluteY, 3)),
 	(0x21, Instruction(Operation::AND, AddressingMode::IndirectX, 2)),
 	(0x31, Instruction(Operation::AND, AddressingMode::IndirectY, 2)),
-	(0x0a, Instruction(Operation::ASL, AddressingMode::None, 1)),
+	(0x0a, Instruction(Operation::ASL, AddressingMode::Accumulator, 1)),
 	(0x06, Instruction(Operation::ASL, AddressingMode::ZeroPage, 2)),
 	(0x16, Instruction(Operation::ASL, AddressingMode::ZeroPageX, 2)),
 	(0x0e, Instruction(Operation::ASL, AddressingMode::Absolute, 3)),
@@ -121,7 +122,7 @@ static MOS6502_OP_CODES: [(u8, Instruction); 149] = [
 	(0xb4, Instruction(Operation::LDY, AddressingMode::ZeroPageX, 2)),
 	(0xac, Instruction(Operation::LDY, AddressingMode::Absolute, 3)),
 	(0xbc, Instruction(Operation::LDY, AddressingMode::AbsoluteX, 3)),	
-	(0x4a, Instruction(Operation::LSR, AddressingMode::None, 1)),	
+	(0x4a, Instruction(Operation::LSR, AddressingMode::Accumulator, 1)),	
 	(0x46, Instruction(Operation::LSR, AddressingMode::ZeroPage, 2)),	
 	(0x56, Instruction(Operation::LSR, AddressingMode::ZeroPageX, 2)),	
 	(0x4e, Instruction(Operation::LSR, AddressingMode::Absolute, 3)),	
@@ -139,17 +140,18 @@ static MOS6502_OP_CODES: [(u8, Instruction); 149] = [
 	(0x08, Instruction(Operation::PHP, AddressingMode::None, 1)),
 	(0x68, Instruction(Operation::PLA, AddressingMode::None, 1)),
 	(0x28, Instruction(Operation::PLP, AddressingMode::None, 1)),
-	(0x2a, Instruction(Operation::ROL, AddressingMode::None, 1)),
+	(0x2a, Instruction(Operation::ROL, AddressingMode::Accumulator, 1)),
 	(0x26, Instruction(Operation::ROL, AddressingMode::ZeroPage, 2)),
 	(0x36, Instruction(Operation::ROL, AddressingMode::ZeroPageX, 2)),
 	(0x2e, Instruction(Operation::ROL, AddressingMode::Absolute, 3)),
 	(0x3e, Instruction(Operation::ROL, AddressingMode::AbsoluteX, 3)),
-	(0x6a, Instruction(Operation::ROR, AddressingMode::None, 1)),
+	(0x6a, Instruction(Operation::ROR, AddressingMode::Accumulator, 1)),
 	(0x66, Instruction(Operation::ROR, AddressingMode::ZeroPage, 2)),
 	(0x76, Instruction(Operation::ROR, AddressingMode::ZeroPageX, 2)),
 	(0x6e, Instruction(Operation::ROR, AddressingMode::Absolute, 3)),
 	(0x7e, Instruction(Operation::ROR, AddressingMode::AbsoluteX, 3)),
 	(0x60, Instruction(Operation::RTS, AddressingMode::None, 1)),
+	(0x40, Instruction(Operation::RTI, AddressingMode::None, 1)),
 	(0xe9, Instruction(Operation::SBC, AddressingMode::Immediate, 2)),
 	(0xe5, Instruction(Operation::SBC, AddressingMode::ZeroPage, 2)),
 	(0xf5, Instruction(Operation::SBC, AddressingMode::ZeroPageX, 2)),
@@ -187,10 +189,10 @@ pub fn alloc_opcode_map() -> HashMap<u8, Instruction> {
 }
 
 type OpImpl = fn(&mut MOS6502, AddressingMode) -> Option<u16>;
-pub(super) static MOS6502_OP_IMPLS: [OpImpl; 54] = [
+pub(super) static MOS6502_OP_IMPLS: [OpImpl; 55] = [
 	adc, and, asl, bcc, bcs, beq, bit, bmi, bne, bpl, bvc, bvs, clc,
 	cld, cli, clv, cmp, cpx, cpy, dec, dex, dey, eor, inc, inx, iny, jmp,
-	jsr, lda, ldx, ldy, lsr, nop, ora, pha, php, pla, plp, rol, ror,
+	jsr, lda, ldx, ldy, lsr, nop, ora, pha, php, pla, plp, rol, ror, rti,
 	rts, sbc, sec, sed, sei, sta, stx, sty, tax, tay, tsx, txa, txs, tya
 ];
 
@@ -452,8 +454,10 @@ fn plp(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
 
 fn rol(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
 	bitwise_shift_or_rotate(cpu, mode, |status, value| {
+		let carry_in = status.intersection(StatusFlags::CARRY).bits();
 		status.set(StatusFlags::CARRY, value & 0b1000_0000 != 0);
-		value.rotate_left(1)
+
+		(value << 1) | carry_in
 	});
 
 	None
@@ -461,11 +465,22 @@ fn rol(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
 
 fn ror(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
 	bitwise_shift_or_rotate(cpu, mode, |status, value| {
+		let carry_in = status.intersection(StatusFlags::CARRY).bits();
 		status.set(StatusFlags::CARRY, value & 0b0000_0001 != 0);
-		value.rotate_right(1)
+
+		(carry_in << 7) | (value >> 1)
 	});
 
 	None
+}
+
+fn rti(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
+	plp(cpu, mode);
+
+	let addr = cpu.read_u16(0x0100 + cpu.reg.sp as u16 + 1);
+	cpu.reg.sp += 2;
+
+	Some(addr)
 }
 
 fn rts(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
@@ -589,7 +604,7 @@ fn bitwise_shift_or_rotate<F>(cpu: &mut MOS6502, mode: AddressingMode, op: F)
 	let old;
 	let new;
 
-	if let AddressingMode::None = mode {
+	if let AddressingMode::Accumulator = mode {
 		old = cpu.reg.acc;
 		new = op(&mut cpu.reg.status, old);
 		cpu.reg.acc = new;
@@ -644,7 +659,7 @@ fn get_operand_addr(cpu: &mut MOS6502, mode: AddressingMode) -> u16 {
 			let addr = cpu.read(cpu.reg.pc);
 			cpu.read_u16(addr as u16).wrapping_add(cpu.reg.y as u16)
 		},
-		AddressingMode::None => panic!("no operand")
+		AddressingMode::Accumulator | AddressingMode::None => panic!("no operand")
 	}
 }
 
@@ -1169,13 +1184,23 @@ mod test {
 	}
 
 	#[test]
-	fn ror_carry() {
+	fn ror_carry_in() {
 		let mut cpu = MOS6502::new();
-		cpu.__test__load_and_run(&[0xa9, 0xFF, 0x6a, 0x00]);
+		cpu.__test__load_and_run(&[0x38, 0xa9, 0xFE, 0x6a, 0x00]);
 		assert_eq!(cpu.reg.acc, 0xFF);
-		assert!(cpu.reg.status.contains(StatusFlags::CARRY));
+		assert!(!cpu.reg.status.contains(StatusFlags::CARRY));
 		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
 		assert!(cpu.reg.status.contains(StatusFlags::NEGATIVE));
+	}
+
+	#[test]
+	fn ror_carry_out() {
+		let mut cpu = MOS6502::new();
+		cpu.__test__load_and_run(&[0xa9, 0xFF, 0x6a, 0x00]);
+		assert_eq!(cpu.reg.acc, 0x7F);
+		assert!(cpu.reg.status.contains(StatusFlags::CARRY));
+		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
+		assert!(!cpu.reg.status.contains(StatusFlags::NEGATIVE));
 	}
 
 	#[test]
