@@ -445,6 +445,7 @@ fn plp(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
 	let byte = cpu.read(0x0100 + cpu.reg.sp as u16);
 	cpu.reg.status = StatusFlags::from_bits(byte).unwrap();
 	cpu.reg.status.remove(StatusFlags::BREAK_COMMAND);
+	cpu.reg.status.insert(StatusFlags::UNUSED);
 
 	None
 }
@@ -548,7 +549,6 @@ fn txa(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
 
 fn txs(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
 	cpu.reg.sp = cpu.reg.x;
-	cpu.reg.status.update_zero_and_neg(cpu.reg.sp);
 
 	None
 }
@@ -616,10 +616,11 @@ fn relative_branch(cpu: &mut MOS6502, condition: bool) -> Option<u16> {
 
 fn compare(cpu: &mut MOS6502, reg: u8, addr: u16) {
 	let byte = cpu.read(addr);
+	let result = reg.wrapping_sub(byte);
 
 	cpu.reg.status.set(StatusFlags::CARRY, reg >= byte);
 	cpu.reg.status.set(StatusFlags::ZERO, reg == byte);
-	cpu.reg.status.set(StatusFlags::NEGATIVE, reg < byte);
+	cpu.reg.status.set(StatusFlags::NEGATIVE, result & 0b1000_0000 != 0);
 }
 
 fn get_operand_addr(cpu: &mut MOS6502, mode: AddressingMode) -> u16 {
