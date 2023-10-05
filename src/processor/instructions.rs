@@ -648,8 +648,18 @@ fn get_operand_addr(cpu: &mut MOS6502, mode: AddressingMode) -> u16 {
 		AddressingMode::AbsoluteX => cpu.read_u16(cpu.reg.pc).wrapping_add(cpu.reg.x as u16),
 		AddressingMode::AbsoluteY => cpu.read_u16(cpu.reg.pc).wrapping_add(cpu.reg.y as u16),
 		AddressingMode::Indirect => {
+			/*
+				An original 6502 has does not correctly fetch the target address
+				if the indirect vector falls on a page boundary (e.g. $xxFF where xx is any value from $00 to $FF).
+				In this case fetches the LSB from $xxFF as expected but takes the MSB from $xx00.
+			 */
 			let addr = cpu.read_u16(cpu.reg.pc);
-			cpu.read_u16(addr)
+			let lo = cpu.read(addr) as u16;
+
+			let hi_addr = (0xFF00 & addr) | (0x00FF & addr.wrapping_add(1));
+			let hi = cpu.read(hi_addr) as u16;
+
+			hi << 8 | lo
 		},
 		AddressingMode::IndirectX => {
 			let addr = cpu.read(cpu.reg.pc).wrapping_add(cpu.reg.x);
@@ -1075,6 +1085,19 @@ mod test {
 		cpu.run();
 		assert_eq!(cpu.reg.acc, 0x42);
 	}
+
+	#[test]
+	fn jmp_page_boundary_overflow() {
+		let mut cpu = MOS6502::new();
+		cpu.bus.__test__load_program(&[0x6c, 0xff, 0x00]);
+		cpu.reset();
+		cpu.write_u16_zeropage(0xff, 0x0300);
+		cpu.write(0x0300, 0xa9); // LDA
+		cpu.write(0x0301, 0x42); // #$42
+		cpu.write(0x0302, 0x00);
+		cpu.run();
+		assert_eq!(cpu.reg.acc, 0x42);
+	}	
 
 	#[test]
 	fn jsr() {
