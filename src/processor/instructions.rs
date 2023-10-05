@@ -12,7 +12,7 @@ pub enum Operation {
 	RTS, SBC, SEC, SED, SEI, STA, STX, STY, TAX, TAY, TSX, TXA, TXS, TYA,
 
 	/* Illegal op codes */
-	ANC, SAX, ARR, ASR, LXA, SHA, SBX, DCP, LAX
+	ANC, SAX, ARR, ASR, LXA, SHA, SBX, DCP, ISB, LAX
 }
 
 impl Display for Operation {
@@ -44,7 +44,7 @@ pub enum AddressingMode {
 #[derive(Clone, Copy, Debug)]
 pub struct Instruction(pub Operation, pub AddressingMode, pub u8);
 
-static MOS6502_OP_CODES: [(u8, Instruction); 203] = [
+static MOS6502_OP_CODES: [(u8, Instruction); 210] = [
 	(0x69, Instruction(Operation::ADC, AddressingMode::Immediate, 2)),
 	(0x65, Instruction(Operation::ADC, AddressingMode::ZeroPage, 2)),
 	(0x75, Instruction(Operation::ADC, AddressingMode::ZeroPageX, 2)),
@@ -216,6 +216,14 @@ static MOS6502_OP_CODES: [(u8, Instruction); 203] = [
 	(0xdb, Instruction(Operation::DCP, AddressingMode::AbsoluteY, 3)),
 	(0xc3, Instruction(Operation::DCP, AddressingMode::IndirectX, 2)),
 	(0xd3, Instruction(Operation::DCP, AddressingMode::IndirectY, 2)),
+	(0xe7, Instruction(Operation::ISB, AddressingMode::ZeroPage, 2)),
+	(0xf7, Instruction(Operation::ISB, AddressingMode::ZeroPageX, 2)),
+	(0xef, Instruction(Operation::ISB, AddressingMode::Absolute, 3)),
+	(0xff, Instruction(Operation::ISB, AddressingMode::AbsoluteX, 3)),
+	(0xfb, Instruction(Operation::ISB, AddressingMode::AbsoluteY, 3)),
+	(0xe3, Instruction(Operation::ISB, AddressingMode::IndirectX, 2)),
+	(0xf3, Instruction(Operation::ISB, AddressingMode::IndirectY, 2)),
+
 	(0x1a, Instruction(Operation::NOP, AddressingMode::None, 1)),
 	(0x3a, Instruction(Operation::NOP, AddressingMode::None, 1)),
 	(0x5a, Instruction(Operation::NOP, AddressingMode::None, 1)),
@@ -257,13 +265,13 @@ pub fn alloc_opcode_map() -> HashMap<u8, Instruction> {
 }
 
 type OpImpl = fn(&mut MOS6502, AddressingMode) -> Option<u16>;
-pub(super) static MOS6502_OP_IMPLS: [OpImpl; 64] = [
+pub(super) static MOS6502_OP_IMPLS: [OpImpl; 65] = [
 	adc, and, asl, bcc, bcs, beq, bit, bmi, bne, bpl, bvc, bvs, clc,
 	cld, cli, clv, cmp, cpx, cpy, dec, dex, dey, eor, inc, inx, iny, jmp,
 	jsr, lda, ldx, ldy, lsr, nop, ora, pha, php, pla, plp, rol, ror, rti,
 	rts, sbc, sec, sed, sei, sta, stx, sty, tax, tay, tsx, txa, txs, tya,
 
-	anc, sax, arr, asr, lxa, sha, sbx, dcp, lax
+	anc, sax, arr, asr, lxa, sha, sbx, dcp, isb, lax
 ];
 
 fn adc(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
@@ -710,8 +718,17 @@ fn sbx(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
 }
 
 fn dcp(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
-	dec(cpu, mode);
+	let addr = get_operand_addr(cpu, mode);
+	let byte = cpu.read(addr);
+	cpu.write(addr, byte.wrapping_sub(1));
 	cmp(cpu, mode)
+}
+
+fn isb(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
+	let addr = get_operand_addr(cpu, mode);
+	let byte = cpu.read(addr);
+	cpu.write(addr, byte.wrapping_add(1));
+	sbc(cpu, mode)
 }
 
 fn lax(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
