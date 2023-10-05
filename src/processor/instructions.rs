@@ -1,15 +1,28 @@
-use std::{collections::HashMap, num::Wrapping, ops::Add};
+use std::{collections::HashMap, num::Wrapping, ops::Add, fmt::Display};
 
 use crate::memory::Mem;
 use super::{MOS6502, StatusFlags};
 
 #[repr(u8)]
-#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
 pub enum Operation {
 	ADC, AND, ASL, BCC, BCS, BEQ, BIT, BMI, BNE, BPL, /* BRK, */ BVC, BVS, CLC,
 	CLD, CLI, CLV, CMP, CPX, CPY, DEC, DEX, DEY, EOR, INC, INX, INY, JMP,
 	JSR, LDA, LDX, LDY, LSR, NOP, ORA, PHA, PHP, PLA, PLP, ROL, ROR, RTI,
-	RTS, SBC, SEC, SED, SEI, STA, STX, STY, TAX, TAY, TSX, TXA, TXS, TYA
+	RTS, SBC, SEC, SED, SEI, STA, STX, STY, TAX, TAY, TSX, TXA, TXS, TYA,
+
+	/* Illegal op codes */
+	DOP, TOP
+}
+
+impl Display for Operation {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		if self <= &Self::TYA {
+			write!(f, " {:?}", self)
+		} else {
+			write!(f, "*{:?}", self)
+		}
+	}
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -31,7 +44,7 @@ pub enum AddressingMode {
 #[derive(Clone, Copy, Debug)]
 pub struct Instruction(pub Operation, pub AddressingMode, pub u8);
 
-static MOS6502_OP_CODES: [(u8, Instruction); 150] = [
+static MOS6502_OP_CODES: [(u8, Instruction); 177] = [
 	(0x69, Instruction(Operation::ADC, AddressingMode::Immediate, 2)),
 	(0x65, Instruction(Operation::ADC, AddressingMode::ZeroPage, 2)),
 	(0x75, Instruction(Operation::ADC, AddressingMode::ZeroPageX, 2)),
@@ -181,7 +194,36 @@ static MOS6502_OP_CODES: [(u8, Instruction); 150] = [
 	(0xba, Instruction(Operation::TSX, AddressingMode::None, 1)),
 	(0x8a, Instruction(Operation::TXA, AddressingMode::None, 1)),
 	(0x9a, Instruction(Operation::TXS, AddressingMode::None, 1)),
-	(0x98, Instruction(Operation::TYA, AddressingMode::None, 1))
+	(0x98, Instruction(Operation::TYA, AddressingMode::None, 1)),
+
+	/* Illegal op codes */
+	(0x1a, Instruction(Operation::NOP, AddressingMode::None, 1)),
+	(0x3a, Instruction(Operation::NOP, AddressingMode::None, 1)),
+	(0x5a, Instruction(Operation::NOP, AddressingMode::None, 1)),
+	(0x7a, Instruction(Operation::NOP, AddressingMode::None, 1)),
+	(0xda, Instruction(Operation::NOP, AddressingMode::None, 1)),
+	(0xfa, Instruction(Operation::NOP, AddressingMode::None, 1)),
+	(0x04, Instruction(Operation::DOP, AddressingMode::ZeroPage, 2)),
+	(0x14, Instruction(Operation::DOP, AddressingMode::ZeroPageX, 2)),
+	(0x34, Instruction(Operation::DOP, AddressingMode::ZeroPageX, 2)),
+	(0x44, Instruction(Operation::DOP, AddressingMode::ZeroPage, 2)),
+	(0x54, Instruction(Operation::DOP, AddressingMode::ZeroPageX, 2)),
+	(0x64, Instruction(Operation::DOP, AddressingMode::ZeroPage, 2)),
+	(0x74, Instruction(Operation::DOP, AddressingMode::ZeroPageX, 2)),
+	(0x80, Instruction(Operation::DOP, AddressingMode::Immediate, 2)),
+	(0x82, Instruction(Operation::DOP, AddressingMode::Immediate, 2)),
+	(0x89, Instruction(Operation::DOP, AddressingMode::Immediate, 2)),
+	(0xc2, Instruction(Operation::DOP, AddressingMode::Immediate, 2)),
+	(0xd4, Instruction(Operation::DOP, AddressingMode::ZeroPageX, 2)),
+	(0xe2, Instruction(Operation::DOP, AddressingMode::Immediate, 2)),
+	(0xf4, Instruction(Operation::DOP, AddressingMode::ZeroPageX, 2)),
+	(0x0c, Instruction(Operation::TOP, AddressingMode::Absolute, 3)),
+	(0x1c, Instruction(Operation::TOP, AddressingMode::AbsoluteX, 3)),
+	(0x3c, Instruction(Operation::TOP, AddressingMode::AbsoluteX, 3)),
+	(0x5c, Instruction(Operation::TOP, AddressingMode::AbsoluteX, 3)),
+	(0x7c, Instruction(Operation::TOP, AddressingMode::AbsoluteX, 3)),
+	(0xdc, Instruction(Operation::TOP, AddressingMode::AbsoluteX, 3)),
+	(0xfc, Instruction(Operation::TOP, AddressingMode::AbsoluteX, 3)),
 ];
 
 pub fn alloc_opcode_map() -> HashMap<u8, Instruction> {
@@ -189,11 +231,13 @@ pub fn alloc_opcode_map() -> HashMap<u8, Instruction> {
 }
 
 type OpImpl = fn(&mut MOS6502, AddressingMode) -> Option<u16>;
-pub(super) static MOS6502_OP_IMPLS: [OpImpl; 55] = [
+pub(super) static MOS6502_OP_IMPLS: [OpImpl; 57] = [
 	adc, and, asl, bcc, bcs, beq, bit, bmi, bne, bpl, bvc, bvs, clc,
 	cld, cli, clv, cmp, cpx, cpy, dec, dex, dey, eor, inc, inx, iny, jmp,
 	jsr, lda, ldx, ldy, lsr, nop, ora, pha, php, pla, plp, rol, ror, rti,
-	rts, sbc, sec, sed, sei, sta, stx, sty, tax, tay, tsx, txa, txs, tya
+	rts, sbc, sec, sed, sei, sta, stx, sty, tax, tay, tsx, txa, txs, tya,
+
+	nop, nop
 ];
 
 fn adc(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {

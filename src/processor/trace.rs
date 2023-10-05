@@ -17,11 +17,16 @@ pub fn trace(cpu: &MOS6502) -> String {
 				str.push_str(&format!("{:02X} ", cpu.read(cpu.reg.pc + i as u16)));
 			}
 
-			while str.len() != 16 {
+			while str.len() != 15 {
 				str.push(' ');
 			}
 
-			str.push_str(&format!("{:?} ", instr));
+			let instruction_name = match (instr, opcode) {
+				(Operation::NOP, 0xea) => format!(" NOP "),
+				(Operation::NOP | Operation::DOP | Operation::TOP, _) => format!("*NOP "),
+				_ => format!("{} ", instr)
+			};
+			str.push_str(&instruction_name);
 
 			match size {
 				1 => {
@@ -55,7 +60,7 @@ pub fn trace(cpu: &MOS6502) -> String {
 
 fn format_u8_operand(cpu: &MOS6502, operand: u8, mode: AddressingMode) -> String {
 	match mode {
-		AddressingMode::None => format!("${:04X}", cpu.reg.pc + operand as u16 + 2), // "branch if" etc.
+		AddressingMode::None => format!("${:04X}", cpu.reg.pc.wrapping_add(operand as i8 as u16).wrapping_add(2)), // "branch if" etc.
 		AddressingMode::Immediate => format!("#${:02X}", operand),
 		AddressingMode::ZeroPage => format!("${:02X} = {:02X}", operand, cpu.read(operand as u16)),
 		AddressingMode::ZeroPageX => {
