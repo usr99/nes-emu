@@ -12,7 +12,7 @@ pub enum Operation {
 	RTS, SBC, SEC, SED, SEI, STA, STX, STY, TAX, TAY, TSX, TXA, TXS, TYA,
 
 	/* Illegal op codes */
-	ANC, SAX, ARR, ASR, LXA, SHA, SBX, DCP, ISB, LAX, SLO
+	ANC, SAX, ARR, ASR, LXA, SHA, SBX, DCP, ISB, LAX, RLA, RRA, SLO
 }
 
 impl Display for Operation {
@@ -44,7 +44,7 @@ pub enum AddressingMode {
 #[derive(Clone, Copy, Debug)]
 pub struct Instruction(pub Operation, pub AddressingMode, pub u8);
 
-static MOS6502_OP_CODES: [(u8, Instruction); 217] = [
+static MOS6502_OP_CODES: [(u8, Instruction); 231] = [
 	(0x69, Instruction(Operation::ADC, AddressingMode::Immediate, 2)),
 	(0x65, Instruction(Operation::ADC, AddressingMode::ZeroPage, 2)),
 	(0x75, Instruction(Operation::ADC, AddressingMode::ZeroPageX, 2)),
@@ -250,6 +250,20 @@ static MOS6502_OP_CODES: [(u8, Instruction); 217] = [
 	(0xbf, Instruction(Operation::LAX, AddressingMode::AbsoluteY, 3)),
 	(0xa3, Instruction(Operation::LAX, AddressingMode::IndirectX, 2)),
 	(0xb3, Instruction(Operation::LAX, AddressingMode::IndirectY, 2)),
+	(0x27, Instruction(Operation::RLA, AddressingMode::ZeroPage, 2)),
+	(0x37, Instruction(Operation::RLA, AddressingMode::ZeroPageX, 2)),
+	(0x2f, Instruction(Operation::RLA, AddressingMode::Absolute, 3)),
+	(0x3f, Instruction(Operation::RLA, AddressingMode::AbsoluteX, 3)),
+	(0x3b, Instruction(Operation::RLA, AddressingMode::AbsoluteY, 3)),
+	(0x23, Instruction(Operation::RLA, AddressingMode::IndirectX, 2)),
+	(0x33, Instruction(Operation::RLA, AddressingMode::IndirectY, 2)),
+	(0x67, Instruction(Operation::RRA, AddressingMode::ZeroPage, 2)),
+	(0x77, Instruction(Operation::RRA, AddressingMode::ZeroPageX, 2)),
+	(0x6f, Instruction(Operation::RRA, AddressingMode::Absolute, 3)),
+	(0x7f, Instruction(Operation::RRA, AddressingMode::AbsoluteX, 3)),
+	(0x7b, Instruction(Operation::RRA, AddressingMode::AbsoluteY, 3)),
+	(0x63, Instruction(Operation::RRA, AddressingMode::IndirectX, 2)),
+	(0x73, Instruction(Operation::RRA, AddressingMode::IndirectY, 2)),
 	(0xeb, Instruction(Operation::SBC, AddressingMode::Immediate, 2)),
 	(0x07, Instruction(Operation::SLO, AddressingMode::ZeroPage, 2)),
 	(0x17, Instruction(Operation::SLO, AddressingMode::ZeroPageX, 2)),
@@ -272,13 +286,13 @@ pub fn alloc_opcode_map() -> HashMap<u8, Instruction> {
 }
 
 type OpImpl = fn(&mut MOS6502, AddressingMode) -> Option<u16>;
-pub(super) static MOS6502_OP_IMPLS: [OpImpl; 66] = [
+pub(super) static MOS6502_OP_IMPLS: [OpImpl; 68] = [
 	adc, and, asl, bcc, bcs, beq, bit, bmi, bne, bpl, bvc, bvs, clc,
 	cld, cli, clv, cmp, cpx, cpy, dec, dex, dey, eor, inc, inx, iny, jmp,
 	jsr, lda, ldx, ldy, lsr, nop, ora, pha, php, pla, plp, rol, ror, rti,
 	rts, sbc, sec, sed, sei, sta, stx, sty, tax, tay, tsx, txa, txs, tya,
 
-	anc, sax, arr, asr, lxa, sha, sbx, dcp, isb, lax, slo
+	anc, sax, arr, asr, lxa, sha, sbx, dcp, isb, lax, rla, rra, slo
 ];
 
 fn adc(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
@@ -745,6 +759,37 @@ fn lax(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
 	cpu.reg.acc = byte;
 	cpu.reg.x = byte;
 	cpu.reg.status.update_zero_and_neg(byte);
+
+	None
+}
+
+fn rla(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
+	let addr = get_operand_addr(cpu, mode);
+	let byte = cpu.read(addr);
+	
+	let carry_in = cpu.reg.status.intersection(StatusFlags::CARRY).bits();
+	cpu.reg.status.set(StatusFlags::CARRY, byte & 0b1000_0000 != 0);
+
+	// rotate left
+	let byte = (byte << 1) | carry_in;
+	cpu.write(addr, byte);
+	// and accumulator
+	cpu.reg.acc &= byte;
+	cpu.reg.status.update_zero_and_neg(cpu.reg.acc);
+
+	None
+}
+
+fn rra(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
+	let addr = get_operand_addr(cpu, mode);
+	let byte = cpu.read(addr);
+	
+	let carry_in = cpu.reg.status.intersection(StatusFlags::CARRY).bits();
+	cpu.reg.status.set(StatusFlags::CARRY, byte & 0b0000_0001 != 0);
+
+	let byte = (carry_in << 7) | (byte >> 1);
+	cpu.write(addr, byte);
+	add_with_carry(cpu, byte);
 
 	None
 }
