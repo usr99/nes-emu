@@ -67,7 +67,7 @@ impl MOS6502 {
 		self.reg.acc = 0;
 		self.reg.x = 0;
 
-		const TEST: bool = true;
+		const TEST: bool = false;
 
 		if !TEST {
 			self.reg.status = StatusFlags::UNUSED | StatusFlags::INTERRUPT_DISABLE;

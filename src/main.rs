@@ -1,4 +1,5 @@
-use std::io::{Read, Write};
+#![allow(unused)]
+#![allow(dead_code)]
 
 use nes::{processor::MOS6502, memory::{Mem, Rom}};
 use rand::Rng;
@@ -18,7 +19,7 @@ fn main() {
 	let creator = canvas.texture_creator();
 	let mut texture = creator.create_texture_target(PixelFormatEnum::RGB24, 32, 32).unwrap();
 
-	let rom = match Rom::from_file("snake.nes") {
+	let rom = match Rom::from_file("nestest.nes") {
 		Ok(rom) => rom,
 		Err(msg) => panic!("{msg}")
 	};
@@ -31,16 +32,17 @@ fn main() {
 	let mut rng = rand::thread_rng();
 
 	cpu.run_with_callback(move |cpu| {
-		handle_user_input(cpu, &mut event_pump);
-		cpu.write(0xfe, rng.gen_range(1..16));
+		println!("{}\r", nes::processor::trace::trace(cpu));
+		// handle_user_input(cpu, &mut event_pump);
+		// cpu.write(0xfe, rng.gen_range(1..16));
 
-		if read_screen_state(cpu, &mut screen_state) {
-			texture.update(None, &screen_state, 32 * 3).unwrap();
-			canvas.copy(&texture, None, None).unwrap();
-			canvas.present();
-		}
+		// if read_screen_state(cpu, &mut screen_state) {
+		// 	texture.update(None, &screen_state, 32 * 3).unwrap();
+		// 	canvas.copy(&texture, None, None).unwrap();
+		// 	canvas.present();
+		// }
 
-		std::thread::sleep(std::time::Duration::new(0, 100));
+		// std::thread::sleep(std::time::Duration::new(0, 100));
 	});
 }
 
