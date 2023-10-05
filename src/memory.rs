@@ -18,16 +18,20 @@ pub trait Mem {
 		self.write(addr.wrapping_add(1), (value >> 8) as u8);
 	}
 
-	fn read_u16_zeropage(&self, addr: u8) -> u16 {
-		let lo = self.read(addr as u16) as u16;
-		let hi = self.read(addr.wrapping_add(1) as u16) as u16;
+	fn read_u16_page_boundary(&self, addr: u16) -> u16 {
+		let lo = self.read(addr) as u16;
+
+		let addr = (0xFF00 & addr) | (0x00FF & addr.wrapping_add(1));
+		let hi = self.read(addr) as u16;
 
 		hi << 8 | lo
 	}
 
-	fn write_u16_zeropage(&mut self, addr: u8, value: u16) {
-		self.write(addr as u16, (value & 0xFF) as u8);
-		self.write(addr.wrapping_add(1) as u16, (value >> 8) as u8);
+	fn write_u16_page_boundary(&mut self, addr: u16, value: u16) {
+		self.write(addr, (value & 0xFF) as u8);
+
+		let addr = (0xFF00 & addr) | (0x00FF & addr.wrapping_add(1));
+		self.write(addr, (value >> 8) as u8);
 	}
 }
 

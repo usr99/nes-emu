@@ -171,7 +171,7 @@ static MOS6502_OP_CODES: [(u8, Instruction); 150] = [
 	(0x81, Instruction(Operation::STA, AddressingMode::IndirectX, 2)),
 	(0x91, Instruction(Operation::STA, AddressingMode::IndirectY, 2)),
 	(0x86, Instruction(Operation::STX, AddressingMode::ZeroPage, 2)),
-	(0x96, Instruction(Operation::STX, AddressingMode::ZeroPageX, 2)),
+	(0x96, Instruction(Operation::STX, AddressingMode::ZeroPageY, 2)),
 	(0x8e, Instruction(Operation::STX, AddressingMode::Absolute, 3)),
 	(0x84, Instruction(Operation::STY, AddressingMode::ZeroPage, 2)),
 	(0x94, Instruction(Operation::STY, AddressingMode::ZeroPageX, 2)),
@@ -662,12 +662,12 @@ fn get_operand_addr(cpu: &mut MOS6502, mode: AddressingMode) -> u16 {
 			hi << 8 | lo
 		},
 		AddressingMode::IndirectX => {
-			let addr = cpu.read(cpu.reg.pc).wrapping_add(cpu.reg.x);
-			cpu.read_u16_zeropage(addr)
+			let addr = cpu.read(cpu.reg.pc).wrapping_add(cpu.reg.x) as u16;
+			cpu.read_u16_page_boundary(addr)
 		},
 		AddressingMode::IndirectY => {
-			let addr = cpu.read(cpu.reg.pc);
-			cpu.read_u16_zeropage(addr).wrapping_add(cpu.reg.y as u16)
+			let addr = cpu.read(cpu.reg.pc) as u16;
+			cpu.read_u16_page_boundary(addr).wrapping_add(cpu.reg.y as u16)
 		},
 		AddressingMode::Accumulator | AddressingMode::None => panic!("no operand")
 	}
@@ -1091,7 +1091,7 @@ mod test {
 		let mut cpu = MOS6502::new();
 		cpu.bus.__test__load_program(&[0x6c, 0xff, 0x00]);
 		cpu.reset();
-		cpu.write_u16_zeropage(0xff, 0x0300);
+		cpu.write_u16_page_boundary(0xff, 0x0300);
 		cpu.write(0x0300, 0xa9); // LDA
 		cpu.write(0x0301, 0x42); // #$42
 		cpu.write(0x0302, 0x00);
