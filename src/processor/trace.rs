@@ -23,7 +23,9 @@ pub fn trace(cpu: &MOS6502) -> String {
 
 			let instruction_name = match (instr, opcode) {
 				(Operation::NOP, 0xea) => format!(" NOP "),
-				(Operation::NOP | Operation::DOP | Operation::TOP, _) => format!("*NOP "),
+				(Operation::NOP, _) => format!("*NOP "),
+				(Operation::SBC, 0xeb) => format!("*SBC "),
+				(Operation::SBC, _) => format!(" SBC "),
 				_ => format!("{} ", instr)
 			};
 			str.push_str(&instruction_name);
