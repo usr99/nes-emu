@@ -37,7 +37,7 @@ static MOS6502_OP_CODES: [(u8, Instruction); 150] = [
 	(0x75, Instruction(Operation::ADC, AddressingMode::ZeroPageX, 2)),
 	(0x6d, Instruction(Operation::ADC, AddressingMode::Absolute, 3)),
 	(0x7d, Instruction(Operation::ADC, AddressingMode::AbsoluteX, 3)),
-	(0x89, Instruction(Operation::ADC, AddressingMode::AbsoluteY, 3)),
+	(0x79, Instruction(Operation::ADC, AddressingMode::AbsoluteY, 3)),
 	(0x61, Instruction(Operation::ADC, AddressingMode::IndirectX, 2)),
 	(0x71, Instruction(Operation::ADC, AddressingMode::IndirectY, 2)),
 	(0x29, Instruction(Operation::AND, AddressingMode::Immediate, 2)),
