@@ -195,7 +195,6 @@ static MOS6502_OP_CODES: [(u8, Instruction); 238] = [
 	(0x8a, Instruction(Operation::TXA, AddressingMode::None, 1)),
 	(0x9a, Instruction(Operation::TXS, AddressingMode::None, 1)),
 	(0x98, Instruction(Operation::TYA, AddressingMode::None, 1)),
-
 	/* Illegal op codes */
 	(0x0b, Instruction(Operation::ANC, AddressingMode::Immediate, 2)),
 	(0x2b, Instruction(Operation::ANC, AddressingMode::Immediate, 2)),

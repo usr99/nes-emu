@@ -1,5 +1,7 @@
 use std::{fs::File, path::Path, io::Read};
 
+use crate::ppu::NesPPU;
+
 pub trait Mem {
 	// Required methods
 	fn read(&self, addr: u16) -> u8;
@@ -42,12 +44,14 @@ const PPU_REGISTERS_MIRRORS_END: u16 = 0x3FFF;
 
 pub struct Bus {
 	cpu_vram: [u8; 2048],
-	rom: Option<Rom>
+	rom: Option<Rom>,
+	ppu: NesPPU
 }
 
 impl Bus {
 	pub fn new() -> Self {
-		Bus { cpu_vram: [0; 2048], rom: None }
+		let ppu = NesPPU::new(vec![], Mirroring::Horizontal);
+		Bus { cpu_vram: [0; 2048], rom: None, ppu }
 	}
 
 	pub fn load_rom(&mut self, rom: Rom) {
@@ -62,9 +66,13 @@ impl Mem for Bus {
 				let mirror_down_addr = addr & 0b00000111_11111111;
 				self.cpu_vram[mirror_down_addr as usize]
 			},
-			PPU_REGISTERS..=PPU_REGISTERS_MIRRORS_END => {
-				let _mirror_down_addr = addr & 0b00100000_00000111;
-				todo!("PPU is not supported yet")
+			0x2000 | 0x2001 | 0x2003 | 0x2005 | 0x2006 | 0x4014 => {
+				panic!("Attempt to read from write-only PPU address {addr:x}");
+			},
+			0x2007 => self.ppu.read_data(),
+			0x2008..=PPU_REGISTERS_MIRRORS_END => {
+				let mirror_down_addr = addr & 0b00100000_00000111;
+				self.read(mirror_down_addr)
 			},
 			0x8000..=0xFFFF => {
 				addr -= 0x8000;
@@ -87,7 +95,10 @@ impl Mem for Bus {
 				let mirror_down_addr = addr & 0b00000111_11111111;
 				self.cpu_vram[mirror_down_addr as usize] = value;
 			},
-			PPU_REGISTERS..=PPU_REGISTERS_MIRRORS_END => {
+			0x2000 => self.ppu.write_to_ctrl(value),
+			0x2006 => self.ppu.write_to_ppu_addr(value),
+			0x2007 => self.ppu.write_to_data(value),
+			0x2008..=PPU_REGISTERS_MIRRORS_END => {
 				let _mirror_down_addr = addr & 0b00100000_00000111;
 				todo!("PPU is not supported yet")
 			},
@@ -98,7 +109,7 @@ impl Mem for Bus {
 }
 
 #[derive(Debug)]
-enum Mirroring {
+pub enum Mirroring {
 	Vertical,
 	Horizontal,
 	FourScreen
