@@ -44,18 +44,14 @@ const PPU_REGISTERS_MIRRORS_END: u16 = 0x3FFF;
 
 pub struct Bus {
 	cpu_vram: [u8; 2048],
-	rom: Option<Rom>,
+	prg_rom: Vec<u8>,
 	ppu: NesPPU
 }
 
 impl Bus {
-	pub fn new() -> Self {
-		let ppu = NesPPU::new(vec![], Mirroring::Horizontal);
-		Bus { cpu_vram: [0; 2048], rom: None, ppu }
-	}
-
-	pub fn load_rom(&mut self, rom: Rom) {
-		self.rom = Some(rom);
+	pub fn new(rom: Rom) -> Self {
+		let ppu = NesPPU::new(rom.chr_rom, Mirroring::Horizontal);
+		Bus { cpu_vram: [0; 2048], prg_rom: rom.prg_rom, ppu }
 	}
 }
 
@@ -76,11 +72,11 @@ impl Mem for Bus {
 			},
 			0x8000..=0xFFFF => {
 				addr -= 0x8000;
-				if self.rom.as_ref().unwrap().prg_rom.len() == 0x4000 && addr >= 0x4000 {
+				if self.prg_rom.len() == 0x4000 && addr >= 0x4000 {
 					addr %= 0x4000;
 				}
 		
-				self.rom.as_ref().unwrap().prg_rom[addr as usize]
+				self.prg_rom[addr as usize]
 			}
 			_ => {
 				println!("Ignoring mem access at {addr}");
@@ -128,7 +124,7 @@ pub struct Rom {
 }
 
 impl Rom {
-	pub fn from_raw(raw: &Vec<u8>) -> Result<Rom, String> {
+	pub fn from_raw(raw: &[u8]) -> Result<Rom, String> {
 		if &raw[0..4] != NES_TAG {
 			return Err("File is not in iNES file format".to_string());
 		}
@@ -180,15 +176,12 @@ mod test {
 
 	impl Bus {
 		#[allow(non_snake_case)]
-		pub fn __test__load_program(&mut self, program: &[u8]) {
-			let prg_rom = program.to_vec();
-
-			self.rom = Some(Rom {
-				prg_rom,
-				chr_rom: vec![],
-				mapper: 0,
-				screen_mirroring: Mirroring::Vertical
-			});
+		pub fn __test__new_from_raw(program: &[u8]) -> Self {
+			Self {
+				prg_rom: program.to_vec(),
+				cpu_vram: [0; 2048],
+				ppu: NesPPU::new(vec![], Mirroring::Horizontal)
+			}
 		}
 	}
 }

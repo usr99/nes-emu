@@ -54,12 +54,12 @@ impl Mem for MOS6502 {
 }
 
 impl MOS6502 {
-	pub fn new() -> Self {
+	pub fn new(bus: Bus) -> Self {
 		Self {
 			reg: Registers {
 				pc: 0, sp: 0xFF, acc: 0, x: 0, y: 0,
 				status: StatusFlags::UNUSED },
-			bus: Bus::new()
+			bus
 		}
 	}
 
@@ -67,22 +67,15 @@ impl MOS6502 {
 		self.reg.acc = 0;
 		self.reg.x = 0;
 
-		const TEST: bool = false;
-
-		if !TEST {
-			self.reg.status = StatusFlags::UNUSED | StatusFlags::INTERRUPT_DISABLE;
-			self.reg.sp = 0xfd;
-			self.reg.pc = 0xC000;
-		} else {
+		if cfg!(test) {
 			self.reg.status = StatusFlags::UNUSED;
 			self.reg.sp = 0xff;
 			self.reg.pc = 0x8000;
-
+		} else {
+			self.reg.status = StatusFlags::UNUSED | StatusFlags::INTERRUPT_DISABLE;
+			self.reg.sp = 0xfd;
+			self.reg.pc = 0xC000;
 		}
-	}
-
-	pub fn load_rom(&mut self, rom: Rom) {
-		self.bus.load_rom(rom);
 	}
 
 	pub fn run(&mut self) {
@@ -129,10 +122,12 @@ mod test {
 
 	impl MOS6502 {
 		#[allow(non_snake_case)]
-		pub fn __test__load_and_run(&mut self, program: &[u8]) {
-			self.bus.__test__load_program(program);
-			self.reset();
-			self.run();
+		pub fn __test__new_from_raw(program: &[u8]) -> Self {
+			let bus = Bus::__test__new_from_raw(program);
+			let mut cpu = Self::new(bus);
+			cpu.reset();
+
+			cpu
 		}
 	}
 }

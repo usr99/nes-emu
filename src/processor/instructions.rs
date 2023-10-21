@@ -918,9 +918,7 @@ mod test {
 
 	#[test]
 	fn adc() {
-		let mut cpu = MOS6502::new();
-		cpu.bus.__test__load_program(&[0x69, 0x10, 0x00]);
-		cpu.reset();
+		let mut cpu = MOS6502::__test__new_from_raw(&[0x69, 0x10, 0x00]);
 		cpu.reg.acc = 0x50;
 		cpu.run();
 		assert_eq!(cpu.reg.acc, 0x60);
@@ -932,9 +930,7 @@ mod test {
 
 	#[test]
 	fn adc_overflow_positive() {
-		let mut cpu = MOS6502::new();
-		cpu.bus.__test__load_program(&[0x69, 0x50, 0x00]);
-		cpu.reset();
+		let mut cpu = MOS6502::__test__new_from_raw(&[0x69, 0x50, 0x00]);
 		cpu.reg.acc = 0x50;
 		cpu.run();
 		assert_eq!(cpu.reg.acc, 0xa0);
@@ -946,9 +942,7 @@ mod test {
 	
 	#[test]
 	fn adc_overflow_negative() {
-		let mut cpu = MOS6502::new();
-		cpu.bus.__test__load_program(&[0x69, 0xd0, 0x00]);
-		cpu.reset();
+		let mut cpu = MOS6502::__test__new_from_raw(&[0x69, 0xd0, 0x00]);
 		cpu.reg.acc = 0x90;
 		cpu.run();
 		assert_eq!(cpu.reg.acc, 0x60);
@@ -960,9 +954,7 @@ mod test {
 
 	#[test]
 	fn adc_zero_page_x() {
-		let mut cpu = MOS6502::new();
-		cpu.bus.__test__load_program(&[0x75, 0xbb, 0x00]);
-		cpu.reset();
+		let mut cpu = MOS6502::__test__new_from_raw(&[0x75, 0xbb, 0x00]);
 		cpu.write(0xbb, 0x12);
 		cpu.reg.acc = 0x12;
 		cpu.run();		
@@ -975,8 +967,8 @@ mod test {
 
 	#[test]
 	fn adc_carry() {
-		let mut cpu = MOS6502::new();
-		cpu.__test__load_and_run(&[0x38, 0xa9, 0x24, 0x69, 0x10, 0x00]);
+		let mut cpu = MOS6502::__test__new_from_raw(&[0x38, 0xa9, 0x24, 0x69, 0x10, 0x00]);
+		cpu.run();
 		assert_eq!(cpu.reg.acc, 0x35);
 		assert!(!cpu.reg.status.contains(StatusFlags::CARRY));
 		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
@@ -986,8 +978,8 @@ mod test {
 
 	#[test]
 	fn lda_0xa9_immediate_load_data() {
-		let mut cpu = MOS6502::new();
-		cpu.__test__load_and_run(&[0xa9, 0x05, 0x00]);
+		let mut cpu = MOS6502::__test__new_from_raw(&[0xa9, 0x05, 0x00]);
+		cpu.run();
 		assert_eq!(cpu.reg.acc, 0x05);
 		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
 		assert!(!cpu.reg.status.contains(StatusFlags::NEGATIVE));
@@ -995,16 +987,14 @@ mod test {
 
 	#[test]
 	fn lda_0xa9_zero_flag() {
-		let mut cpu = MOS6502::new();
-		cpu.__test__load_and_run(&[0xa9, 0x00, 0x00]);
+		let mut cpu = MOS6502::__test__new_from_raw(&[0xa9, 0x00, 0x00]);
+		cpu.run();
 		assert!(cpu.reg.status.contains(StatusFlags::ZERO));
 	}
 
 	#[test]
 	fn tax_0xaa_move_a_to_x() {
-		let mut cpu = MOS6502::new();
-		cpu.bus.__test__load_program(&[0xaa, 0x00]);
-		cpu.reset();
+		let mut cpu = MOS6502::__test__new_from_raw(&[0xaa, 0x00]);
 		cpu.reg.acc = 10;
 		cpu.run();		
 		assert_eq!(cpu.reg.x, 10);
@@ -1012,16 +1002,14 @@ mod test {
 
 	#[test]
 	fn five_ops_working_together() {
-		let mut cpu = MOS6502::new();
-		cpu.__test__load_and_run(&[0xa9, 0xc0, 0xaa, 0xe8, 0x00]);
+		let mut cpu = MOS6502::__test__new_from_raw(&[0xa9, 0xc0, 0xaa, 0xe8, 0x00]);
+		cpu.run();
 		assert_eq!(cpu.reg.x, 0xc1);
 	}
 
 	#[test]
 	fn and_immediate() {
-		let mut cpu = MOS6502::new();
-		cpu.bus.__test__load_program(&[0x29, 0xe8, 0x00]);
-		cpu.reset();
+		let mut cpu = MOS6502::__test__new_from_raw(&[0x29, 0xe8, 0x00]);
 		cpu.reg.acc = 0xff;
 		cpu.run();
 		assert_eq!(cpu.reg.acc, 0xff & 0xe8);
@@ -1030,9 +1018,7 @@ mod test {
 
 	#[test]
 	fn lda_and_zero_page_x() {
-		let mut cpu = MOS6502::new();
-		cpu.bus.__test__load_program(&[0xb5, 0x42, 0x35, 0x21, 0x00]);
-		cpu.reset();
+		let mut cpu = MOS6502::__test__new_from_raw(&[0xb5, 0x42, 0x35, 0x21, 0x00]);
 		cpu.reg.x = 0x05;
 		cpu.write(0x42 + 0x05, 0x88);
 		cpu.write(0x21 + 0x05, 0x72);
@@ -1042,9 +1028,7 @@ mod test {
 
 	#[test]
 	fn and_indirect_y() {
-		let mut cpu = MOS6502::new();
-		cpu.bus.__test__load_program(&[0x31, 0x42, 0x00]);
-		cpu.reset();
+		let mut cpu = MOS6502::__test__new_from_raw(&[0x31, 0x42, 0x00]);
 		cpu.reg.acc = 0xAD;
 		cpu.reg.y = 0x12;
 		cpu.write_u16(0x42, 0x0666);
@@ -1055,9 +1039,7 @@ mod test {
 
 	#[test]
 	fn asl_acc_carry_zero_flag() {
-		let mut cpu = MOS6502::new();
-		cpu.bus.__test__load_program(&[0x0a, 0x00]);
-		cpu.reset();
+		let mut cpu = MOS6502::__test__new_from_raw(&[0x0a, 0x00]);
 		cpu.reg.acc = 0b1000_0000;
 		cpu.run();
 		assert_eq!(cpu.reg.acc, 0);
@@ -1067,9 +1049,7 @@ mod test {
 
 	#[test]
 	fn asl_zero_page() {
-		let mut cpu = MOS6502::new();
-		cpu.bus.__test__load_program(&[0x06, 0x21, 0x00]);
-		cpu.reset();
+		let mut cpu = MOS6502::__test__new_from_raw(&[0x06, 0x21, 0x00]);
 		cpu.write(0x21, 0x42);
 		cpu.run();
 		assert_eq!(cpu.read(0x21), 0x42 << 1);
@@ -1077,9 +1057,7 @@ mod test {
 
 	#[test]
 	fn bcc_noop() {
-		let mut cpu = MOS6502::new();
-		cpu.bus.__test__load_program(&[0x90, 0xff, 0xa9, 0x42, 0x00]);
-		cpu.reset();
+		let mut cpu = MOS6502::__test__new_from_raw(&[0x90, 0xff, 0xa9, 0x42, 0x00]);
 		cpu.reg.status |= StatusFlags::CARRY;
 		cpu.run();
 		assert_eq!(cpu.reg.acc, 0x42);
@@ -1087,17 +1065,15 @@ mod test {
 
 	#[test]
 	fn bcc() {
-		let mut cpu = MOS6502::new();
-		cpu.__test__load_and_run(&[0x90, 0x02, 0x00, 0x00, 0xa9, 0x42, 0x00]);
+		let mut cpu = MOS6502::__test__new_from_raw(&[0x90, 0x02, 0x00, 0x00, 0xa9, 0x42, 0x00]);
+		cpu.run();
 		assert_eq!(cpu.reg.acc, 0x42);
 	}
 
 
 	#[test]
 	fn bcs() {
-		let mut cpu = MOS6502::new();
-		cpu.bus.__test__load_program(&[0xb0, 0x02, 0x00, 0x00, 0xa9, 0x42, 0x00]);
-		cpu.reset();
+		let mut cpu = MOS6502::__test__new_from_raw(&[0xb0, 0x02, 0x00, 0x00, 0xa9, 0x42, 0x00]);
 		cpu.reg.status |= StatusFlags::CARRY;
 		cpu.run();
 		assert_eq!(cpu.reg.acc, 0x42);
@@ -1105,9 +1081,7 @@ mod test {
 
 	#[test]
 	fn beq() {
-		let mut cpu = MOS6502::new();
-		cpu.bus.__test__load_program(&[0xf0, 0x02, 0x00, 0x00, 0xa9, 0x42, 0x00]);
-		cpu.reset();
+		let mut cpu = MOS6502::__test__new_from_raw(&[0xf0, 0x02, 0x00, 0x00, 0xa9, 0x42, 0x00]);
 		cpu.reg.status |= StatusFlags::ZERO;
 		cpu.run();
 		assert_eq!(cpu.reg.acc, 0x42);
@@ -1115,9 +1089,7 @@ mod test {
 
 	#[test]
 	fn bit_zero_page() {
-		let mut cpu = MOS6502::new();
-		cpu.bus.__test__load_program(&[0x24, 0x25, 0x00]);
-		cpu.reset();
+		let mut cpu = MOS6502::__test__new_from_raw(&[0x24, 0x25, 0x00]);
 		cpu.reg.acc = 0b0000_0011;
 		cpu.write(0x25, 0b1111_0000);
 		cpu.run();
@@ -1128,9 +1100,7 @@ mod test {
 
 	#[test]
 	fn bit_absolute() {
-		let mut cpu = MOS6502::new();
-		cpu.bus.__test__load_program(&[0x2c, 0x25, 0x00, 0x00]);
-		cpu.reset();
+		let mut cpu = MOS6502::__test__new_from_raw(&[0x2c, 0x25, 0x00, 0x00]);
 		cpu.reg.acc = 0b0001_0011;
 		cpu.write(0x25, 0b1111_0000);
 		cpu.run();
@@ -1141,9 +1111,7 @@ mod test {
 
 	#[test]
 	fn bmi() {
-		let mut cpu = MOS6502::new();
-		cpu.bus.__test__load_program(&[0x30, 0x02, 0x00, 0x00, 0xa9, 0x42, 0x00]);
-		cpu.reset();
+		let mut cpu = MOS6502::__test__new_from_raw(&[0x30, 0x02, 0x00, 0x00, 0xa9, 0x42, 0x00]);
 		cpu.reg.status |= StatusFlags::NEGATIVE;
 		cpu.run();
 		assert_eq!(cpu.reg.acc, 0x42);
@@ -1151,30 +1119,28 @@ mod test {
 
 	#[test]
 	fn bne() {
-		let mut cpu = MOS6502::new();
-		cpu.__test__load_and_run(&[0xd0, 0x02, 0x00, 0x00, 0xa9, 0x42, 0x00]);
+		let mut cpu = MOS6502::__test__new_from_raw(&[0xd0, 0x02, 0x00, 0x00, 0xa9, 0x42, 0x00]);
+		cpu.run();
 		assert_eq!(cpu.reg.acc, 0x42);
 	}
 
 	#[test]
 	fn bpl() {
-		let mut cpu = MOS6502::new();
-		cpu.__test__load_and_run(&[0x10, 0x02, 0x00, 0x00, 0xa9, 0x42, 0x00]);
+		let mut cpu = MOS6502::__test__new_from_raw(&[0x10, 0x02, 0x00, 0x00, 0xa9, 0x42, 0x00]);
+		cpu.run();
 		assert_eq!(cpu.reg.acc, 0x42);
 	}
 
 	#[test]
 	fn bvc() {
-		let mut cpu = MOS6502::new();
-		cpu.__test__load_and_run(&[0x50, 0x02, 0x00, 0x00, 0xa9, 0x42, 0x00]);
+		let mut cpu = MOS6502::__test__new_from_raw(&[0x50, 0x02, 0x00, 0x00, 0xa9, 0x42, 0x00]);
+		cpu.run();
 		assert_eq!(cpu.reg.acc, 0x42);
 	}
 
 	#[test]
 	fn bvs() {
-		let mut cpu = MOS6502::new();
-		cpu.bus.__test__load_program(&[0x70, 0x02, 0x00, 0x00, 0xa9, 0x42, 0x00]);
-		cpu.reset();
+		let mut cpu = MOS6502::__test__new_from_raw(&[0x70, 0x02, 0x00, 0x00, 0xa9, 0x42, 0x00]);
 		cpu.reg.status |= StatusFlags::OVERFLOW;
 		cpu.run();
 		assert_eq!(cpu.reg.acc, 0x42);
@@ -1182,9 +1148,7 @@ mod test {
 
 	#[test]
 	fn clc_cld_cli_clv() {
-		let mut cpu = MOS6502::new();
-		cpu.bus.__test__load_program(&[0x18, 0xd8, 0x58, 0xb8, 0x00]);
-		cpu.reset();
+		let mut cpu = MOS6502::__test__new_from_raw(&[0x18, 0xd8, 0x58, 0xb8, 0x00]);
 		cpu.reg.status |= StatusFlags::CARRY;
 		cpu.reg.status |= StatusFlags::DECIMAL_MODE;
 		cpu.reg.status |= StatusFlags::INTERRUPT_DISABLE;
@@ -1198,9 +1162,7 @@ mod test {
 
 	#[test]
 	fn cmp_immediate() {
-		let mut cpu = MOS6502::new();
-		cpu.bus.__test__load_program(&[0xc9, 0x42, 0x00]);
-		cpu.reset();
+		let mut cpu = MOS6502::__test__new_from_raw(&[0xc9, 0x42, 0x00]);
 		cpu.reg.acc = 0x42;
 		cpu.run();
 		assert!(cpu.reg.status.contains(StatusFlags::ZERO));
@@ -1210,9 +1172,7 @@ mod test {
 
 	#[test]
 	fn cpx_zero_page() {
-		let mut cpu = MOS6502::new();
-		cpu.bus.__test__load_program(&[0xe4, 0x42, 0x00]);
-		cpu.reset();
+		let mut cpu = MOS6502::__test__new_from_raw(&[0xe4, 0x42, 0x00]);
 		cpu.reg.x = 0x55;
 		cpu.write(0x42, 0x21);
 		cpu.run();
@@ -1223,9 +1183,7 @@ mod test {
 
 	#[test]
 	fn cpy_absolute() {
-		let mut cpu = MOS6502::new();
-		cpu.bus.__test__load_program(&[0xcc, 0xad, 0x00, 0x00]);
-		cpu.reset();
+		let mut cpu = MOS6502::__test__new_from_raw(&[0xcc, 0xad, 0x00, 0x00]);
 		cpu.reg.y = 0x5;
 		cpu.write(0xad, 0x17);
 		cpu.run();
@@ -1236,9 +1194,7 @@ mod test {
 
 	#[test]
 	fn dec_absolute_x() {
-		let mut cpu = MOS6502::new();
-		cpu.bus.__test__load_program(&[0xde, 0xad, 0x00, 0x00]);
-		cpu.reset();
+		let mut cpu = MOS6502::__test__new_from_raw(&[0xde, 0xad, 0x00, 0x00]);
 		cpu.reg.x = 0x12;
 		cpu.write(0x00ad + 0x12, 0x22);
 		cpu.run();
@@ -1249,9 +1205,7 @@ mod test {
 
 	#[test]
 	fn dex() {
-		let mut cpu = MOS6502::new();
-		cpu.bus.__test__load_program(&[0xca, 0x00]);
-		cpu.reset();
+		let mut cpu = MOS6502::__test__new_from_raw(&[0xca, 0x00]);
 		cpu.reg.x = 0x1;
 		cpu.run();
 		assert_eq!(cpu.reg.x, 0x0);
@@ -1261,8 +1215,8 @@ mod test {
 
 	#[test]
 	fn dey() {
-		let mut cpu = MOS6502::new();
-		cpu.__test__load_and_run(&[0x88, 0x00]);
+		let mut cpu = MOS6502::__test__new_from_raw(&[0x88, 0x00]);
+		cpu.run();
 		assert_eq!(cpu.reg.y, 0xFF);
 		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
 		assert!(cpu.reg.status.contains(StatusFlags::NEGATIVE));
@@ -1270,9 +1224,7 @@ mod test {
 
 	#[test]
 	fn eor_zero_page() {
-		let mut cpu = MOS6502::new();
-		cpu.bus.__test__load_program(&[0x45, 0xFF, 0x00]);
-		cpu.reset();
+		let mut cpu = MOS6502::__test__new_from_raw(&[0x45, 0xFF, 0x00]);
 		cpu.write(0xFF, 0b0110_1001);
 		cpu.reg.acc = 0b0110_1001;
 		cpu.run();
@@ -1283,9 +1235,7 @@ mod test {
 
 	#[test]
 	fn inc_absolute() {
-		let mut cpu = MOS6502::new();
-		cpu.bus.__test__load_program(&[0xee, 0xff, 0x05, 0x00]);
-		cpu.reset();
+		let mut cpu = MOS6502::__test__new_from_raw(&[0xee, 0xff, 0x05, 0x00]);
 		cpu.write(0x05ff, 0xf5);
 		cpu.run();
 		assert_eq!(cpu.read(0x05ff), 0xf6);
@@ -1295,9 +1245,7 @@ mod test {
 
 	#[test]
 	fn inx_overflow() {
-		let mut cpu = MOS6502::new();
-		cpu.bus.__test__load_program(&[0xe8, 0xe8, 0x00]);
-		cpu.reset();
+		let mut cpu = MOS6502::__test__new_from_raw(&[0xe8, 0xe8, 0x00]);
 		cpu.reg.x = 0xff;
 		cpu.run();
 		assert_eq!(cpu.reg.x, 1);
@@ -1305,9 +1253,7 @@ mod test {
 
 	#[test]
 	fn iny_overflow() {
-		let mut cpu = MOS6502::new();
-		cpu.bus.__test__load_program(&[0xc8, 0x00]);
-		cpu.reset();
+		let mut cpu = MOS6502::__test__new_from_raw(&[0xc8, 0x00]);
 		cpu.reg.y = 0xff;
 		cpu.run();
 		assert_eq!(cpu.reg.y, 0);
@@ -1317,9 +1263,7 @@ mod test {
 
 	#[test]
 	fn jmp_indirect() {
-		let mut cpu = MOS6502::new();
-		cpu.bus.__test__load_program(&[0x6c, 0xef, 0x00, 0xff, 0xff, 0xa9, 0x42, 0x00]);
-		cpu.reset();
+		let mut cpu = MOS6502::__test__new_from_raw(&[0x6c, 0xef, 0x00, 0xff, 0xff, 0xa9, 0x42, 0x00]);
 		cpu.write_u16(0xef, 0x8000 + 5);
 		cpu.run();
 		assert_eq!(cpu.reg.acc, 0x42);
@@ -1327,9 +1271,7 @@ mod test {
 
 	#[test]
 	fn jmp_page_boundary_overflow() {
-		let mut cpu = MOS6502::new();
-		cpu.bus.__test__load_program(&[0x6c, 0xff, 0x00]);
-		cpu.reset();
+		let mut cpu = MOS6502::__test__new_from_raw(&[0x6c, 0xff, 0x00]);
 		cpu.write_u16_page_boundary(0xff, 0x0300);
 		cpu.write(0x0300, 0xa9); // LDA
 		cpu.write(0x0301, 0x42); // #$42
@@ -1340,17 +1282,15 @@ mod test {
 
 	#[test]
 	fn jsr() {
-		let mut cpu = MOS6502::new();
-		cpu.__test__load_and_run(&[0x20, 0x05, 0x80, 0xea, 0xea, 0x68, 0xaa, 0x68, 0x00]);
+		let mut cpu = MOS6502::__test__new_from_raw(&[0x20, 0x05, 0x80, 0xea, 0xea, 0x68, 0xaa, 0x68, 0x00]);
+		cpu.run();
 		assert_eq!(cpu.reg.x, 0x02);
 		assert_eq!(cpu.reg.acc, 0x80);
 	}
 
 	#[test]
 	fn ldx_zero_page_y_negative() {
-		let mut cpu = MOS6502::new();
-		cpu.bus.__test__load_program(&[0xb6, 0xaf, 0x00]);
-		cpu.reset();
+		let mut cpu = MOS6502::__test__new_from_raw(&[0xb6, 0xaf, 0x00]);
 		cpu.reg.y = 0x05;
 		cpu.write(0xaf + 0x05, 0xfe);
 		cpu.run();
@@ -1361,9 +1301,7 @@ mod test {
 
 	#[test]
 	fn ldy_absolute_x_negative() {
-		let mut cpu = MOS6502::new();
-		cpu.bus.__test__load_program(&[0xbc, 0xfa, 0x00, 0x00]);
-		cpu.reset();
+		let mut cpu = MOS6502::__test__new_from_raw(&[0xbc, 0xfa, 0x00, 0x00]);
 		cpu.reg.x = 0x05;
 		cpu.write(0xfa + 0x05, 0xfe);
 		cpu.run();
@@ -1374,9 +1312,7 @@ mod test {
 
 	#[test]
 	fn lsr_acc() {
-		let mut cpu = MOS6502::new();
-		cpu.bus.__test__load_program(&[0x4a, 0x00]);
-		cpu.reset();
+		let mut cpu = MOS6502::__test__new_from_raw(&[0x4a, 0x00]);
 		cpu.reg.acc = 0b0000_1011;
 		cpu.run();
 		assert_eq!(cpu.reg.acc, 0b0000_1011 >> 1);
@@ -1387,8 +1323,8 @@ mod test {
 
 	#[test]
 	fn nop() {
-		let mut cpu = MOS6502::new();
-		cpu.__test__load_and_run(&[0xa9, 0xff, 0xea, 0xea, 0xea, 0xaa, 0x00]);
+		let mut cpu = MOS6502::__test__new_from_raw(&[0xa9, 0xff, 0xea, 0xea, 0xea, 0xaa, 0x00]);
+		cpu.run();
 		assert_eq!(cpu.reg.x, 0xff);
 		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
 		assert!(cpu.reg.status.contains(StatusFlags::NEGATIVE));
@@ -1396,9 +1332,7 @@ mod test {
 
 	#[test]
 	fn ora_indirect_x() {
-		let mut cpu = MOS6502::new();
-		cpu.bus.__test__load_program(&[0x01, 0xfe, 0x00]);
-		cpu.reset();
+		let mut cpu = MOS6502::__test__new_from_raw(&[0x01, 0xfe, 0x00]);
 		cpu.reg.acc = 0x0f;
 		cpu.reg.x = 0x01;
 		cpu.write(0xff, 0x45);
@@ -1413,32 +1347,30 @@ mod test {
 
 	#[test]
 	fn pha() {
-		let mut cpu = MOS6502::new();
-		cpu.__test__load_and_run(&[0xa9, 0xff, 0x48, 0x00]);
+		let mut cpu = MOS6502::__test__new_from_raw(&[0xa9, 0xff, 0x48, 0x00]);
+		cpu.run();
 		assert_eq!(cpu.read(0x01ff), 0xff);
 		assert_eq!(cpu.reg.sp, 0xfe);
 	}
 
 	#[test]
 	fn php() {
-		let mut cpu = MOS6502::new();
-		cpu.__test__load_and_run(&[0xc9, 0x00, 0x08, 0x00]);
+		let mut cpu = MOS6502::__test__new_from_raw(&[0xc9, 0x00, 0x08, 0x00]);
+		cpu.run();
 		assert_eq!(cpu.read(0x01ff), 0b0011_0011);
 	}
 
 	#[test]
 	fn pha_php_pla_plp() {
-		let mut cpu = MOS6502::new();
-		cpu.__test__load_and_run(&[0xa9, 0xff, 0x48, 0x08, 0x68, 0x28, 0x00]);
+		let mut cpu = MOS6502::__test__new_from_raw(&[0xa9, 0xff, 0x48, 0x08, 0x68, 0x28, 0x00]);
+		cpu.run();
 		assert_eq!(cpu.reg.acc, 0b1011_0000);
 		assert_eq!(cpu.reg.status, StatusFlags::all().difference(StatusFlags::BREAK_COMMAND));
 	}
 
 	#[test]
 	fn rol_absolute_x() {
-		let mut cpu = MOS6502::new();
-		cpu.bus.__test__load_program(&[0x3e, 0xc0, 0x00, 0x3e, 0xc0, 0x00, 0x00]);
-		cpu.reset();
+		let mut cpu = MOS6502::__test__new_from_raw(&[0x3e, 0xc0, 0x00, 0x3e, 0xc0, 0x00, 0x00]);
 		cpu.reg.x = 0xd;
 		cpu.write(0xc0 + 0xd, 0b1100_1111);
 		cpu.run();
@@ -1452,8 +1384,8 @@ mod test {
 
 	#[test]
 	fn ror_carry_in() {
-		let mut cpu = MOS6502::new();
-		cpu.__test__load_and_run(&[0x38, 0xa9, 0xFE, 0x6a, 0x00]);
+		let mut cpu = MOS6502::__test__new_from_raw(&[0x38, 0xa9, 0xFE, 0x6a, 0x00]);
+		cpu.run();
 		assert_eq!(cpu.reg.acc, 0xFF);
 		assert!(!cpu.reg.status.contains(StatusFlags::CARRY));
 		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
@@ -1462,8 +1394,8 @@ mod test {
 
 	#[test]
 	fn ror_carry_out() {
-		let mut cpu = MOS6502::new();
-		cpu.__test__load_and_run(&[0xa9, 0xFF, 0x6a, 0x00]);
+		let mut cpu = MOS6502::__test__new_from_raw(&[0xa9, 0xFF, 0x6a, 0x00]);
+		cpu.run();
 		assert_eq!(cpu.reg.acc, 0x7F);
 		assert!(cpu.reg.status.contains(StatusFlags::CARRY));
 		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
@@ -1472,8 +1404,8 @@ mod test {
 
 	#[test]
 	fn ror_acc() {
-		let mut cpu = MOS6502::new();
-		cpu.__test__load_and_run(&[0x6a, 0x6a, 0x00]);
+		let mut cpu = MOS6502::__test__new_from_raw(&[0x6a, 0x6a, 0x00]);
+		cpu.run();
 		assert_eq!(cpu.reg.acc, 0x0);
 		assert!(!cpu.reg.status.contains(StatusFlags::CARRY));
 		assert!(cpu.reg.status.contains(StatusFlags::ZERO));
@@ -1482,16 +1414,14 @@ mod test {
 
 	#[test]
 	fn rts() {
-		let mut cpu = MOS6502::new();
-		cpu.__test__load_and_run(&[0x20, 0x06, 0x80, 0xa9, 0x42, 0x00, 0x60]);
+		let mut cpu = MOS6502::__test__new_from_raw(&[0x20, 0x06, 0x80, 0xa9, 0x42, 0x00, 0x60]);
+		cpu.run();
 		assert_eq!(cpu.reg.acc, 0x42);
 	}	
 
 	#[test]
 	fn sbc_zero() {
-		let mut cpu = MOS6502::new();
-		cpu.bus.__test__load_program(&[0x38, 0xe9, 0x42, 0x00]);
-		cpu.reset();
+		let mut cpu = MOS6502::__test__new_from_raw(&[0x38, 0xe9, 0x42, 0x00]);
 		cpu.reg.acc = 0x42;
 		cpu.run();
 		assert_eq!(cpu.reg.acc, 0x00);
@@ -1503,8 +1433,8 @@ mod test {
 
 	#[test]
 	fn sbc_18_minus_32_equals_242() {
-		let mut cpu = MOS6502::new();
-		cpu.__test__load_and_run(&[0xa9, 0x12, 0x38, 0xe9, 0x20, 0x00]);
+		let mut cpu = MOS6502::__test__new_from_raw(&[0xa9, 0x12, 0x38, 0xe9, 0x20, 0x00]);
+		cpu.run();
 		assert_eq!(cpu.reg.acc, 0xf2);
 		assert!(!cpu.reg.status.contains(StatusFlags::CARRY));
 		assert!(!cpu.reg.status.contains(StatusFlags::ZERO));
@@ -1514,9 +1444,7 @@ mod test {
 
 	#[test]
 	fn sbc_zero_page_x() {
-		let mut cpu = MOS6502::new();
-		cpu.bus.__test__load_program(&[0xf5, 0xd0, 0x00]);
-		cpu.reset();
+		let mut cpu = MOS6502::__test__new_from_raw(&[0xf5, 0xd0, 0x00]);
 		cpu.reg.acc = 0x50;
 		cpu.reg.x = 0x5;
 		cpu.write(0xd0 + 0x5, 0xb0);
@@ -1530,8 +1458,8 @@ mod test {
 
 	#[test]
 	fn sec_sed_sei() {
-		let mut cpu = MOS6502::new();
-		cpu.__test__load_and_run(&[0x38, 0xf8, 0x78, 0x00]);
+		let mut cpu = MOS6502::__test__new_from_raw(&[0x38, 0xf8, 0x78, 0x00]);
+		cpu.run();
 		assert!(cpu.reg.status.contains(StatusFlags::CARRY));
 		assert!(cpu.reg.status.contains(StatusFlags::DECIMAL_MODE));
 		assert!(cpu.reg.status.contains(StatusFlags::INTERRUPT_DISABLE));
@@ -1539,9 +1467,7 @@ mod test {
 
 	#[test]
 	fn sta_absolute_y() {
-		let mut cpu = MOS6502::new();
-		cpu.bus.__test__load_program(&[0x99, 0xcd, 0x00, 0x00]);
-		cpu.reset();
+		let mut cpu = MOS6502::__test__new_from_raw(&[0x99, 0xcd, 0x00, 0x00]);
 		cpu.reg.acc = 0xf0;
 		cpu.reg.y = 0x10;
 		cpu.run();
@@ -1550,9 +1476,7 @@ mod test {
 
 	#[test]
 	fn stx_sty_absolute() {
-		let mut cpu = MOS6502::new();
-		cpu.bus.__test__load_program(&[0x8e, 0xc0, 0x00, 0x8c, 0xc1, 0x00, 0x00]);
-		cpu.reset();
+		let mut cpu = MOS6502::__test__new_from_raw(&[0x8e, 0xc0, 0x00, 0x8c, 0xc1, 0x00, 0x00]);
 		cpu.reg.x = 0xf0;
 		cpu.reg.y = 0xf1;
 		cpu.run();
@@ -1562,8 +1486,8 @@ mod test {
 
 	#[test]
 	fn tsx_txa_tay() {
-		let mut cpu = MOS6502::new();
-		cpu.__test__load_and_run(&[0xba, 0x8a, 0xa8, 0x00]);
+		let mut cpu = MOS6502::__test__new_from_raw(&[0xba, 0x8a, 0xa8, 0x00]);
+		cpu.run();
 		assert_eq!(cpu.reg.acc, 0xff);
 		assert_eq!(cpu.reg.x, 0xff);
 		assert_eq!(cpu.reg.y, 0xff);
@@ -1571,9 +1495,7 @@ mod test {
 
 	#[test]
 	fn txs_tya() {
-		let mut cpu = MOS6502::new();
-		cpu.bus.__test__load_program(&[0x9a, 0x98, 0x00]);
-		cpu.reset();
+		let mut cpu = MOS6502::__test__new_from_raw(&[0x9a, 0x98, 0x00]);
 		cpu.reg.x = 0xa;
 		cpu.reg.y = 0xb;
 		cpu.run();

@@ -24,8 +24,8 @@ fn main() {
 		Err(msg) => panic!("{msg}")
 	};
 
-	let mut cpu = nes::processor::MOS6502::new();
-	cpu.load_rom(rom);
+	let bus = nes::memory::Bus::new(rom);
+	let mut cpu = nes::processor::MOS6502::new(bus);
 	cpu.reset();
 
 	let mut screen_state = [0u8; 32 * 32 * 3];
