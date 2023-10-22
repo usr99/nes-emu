@@ -1,6 +1,6 @@
 use std::{fs::File, path::Path, io::Read};
 
-use crate::ppu::{NesPPU, registers::WriteRegister};
+use crate::{constants::*, ppu::NesPPU};
 
 pub trait Mem {
 	// Required methods
@@ -37,11 +37,6 @@ pub trait Mem {
 	}
 }
 
-const RAM: u16 = 0x0000;
-const RAM_MIRRORS_END: u16 = 0x1FFF;
-const PPU_REGISTERS: u16 = 0x2000;
-const PPU_REGISTERS_MIRRORS_END: u16 = 0x3FFF;
-
 pub struct Bus {
 	cpu_vram: [u8; 2048],
 	prg_rom: Vec<u8>,
@@ -58,17 +53,13 @@ impl Bus {
 impl Mem for Bus {
 	fn read(&mut self, mut addr: u16) -> u8 {
 		match addr {
-			RAM..= RAM_MIRRORS_END => {
+			RAM..=RAM_MIRRORS_END => {
 				let mirror_down_addr = addr & 0b00000111_11111111;
 				self.cpu_vram[mirror_down_addr as usize]
 			},
-			0x2000 | 0x2001 | 0x2003 | 0x2005 | 0x2006 | 0x4014 => {
-				panic!("Attempt to read from write-only PPU address {addr:x}");
-			},
-			0x2007 => self.ppu.read_data(),
-			0x2008..=PPU_REGISTERS_MIRRORS_END => {
+			PPU_REGISTERS..=PPU_REGISTERS_MIRRORS_END => {
 				let mirror_down_addr = addr & 0b00100000_00000111;
-				self.read(mirror_down_addr)
+				self.ppu.read(mirror_down_addr)
 			},
 			0x8000..=0xFFFF => {
 				addr -= 0x8000;
@@ -87,20 +78,16 @@ impl Mem for Bus {
 
 	fn write(&mut self, addr: u16, value: u8) {
 		match addr {
-			RAM..= RAM_MIRRORS_END => {
+			RAM..=RAM_MIRRORS_END => {
 				let mirror_down_addr = addr & 0b00000111_11111111;
 				self.cpu_vram[mirror_down_addr as usize] = value;
 			},
-			0x2000 => self.ppu.ctrl.write(value),
-			0x2001 => self.ppu.mask.write(value),
-			0x2006 => self.ppu.addr.write(value),
-			0x2007 => self.ppu.write_to_data(value),
-			0x2008..=PPU_REGISTERS_MIRRORS_END => {
+			PPU_REGISTERS..=PPU_REGISTERS_MIRRORS_END => {
 				let _mirror_down_addr = addr & 0b00100000_00000111;
-				todo!("PPU is not supported yet")
+				self.ppu.write(addr, value);
 			},
-			0x8000..=0xFFFF => panic!("Attempt to write to cartridge ROM space"),
-			_ => println!("Ignoring mem access at {addr}")
+			0x8000..=0xFFFF	=> panic!("Attempt to write to cartridge ROM space"),
+			_				=> println!("Ignoring mem access at {addr}")
 		}		
 	}
 }
@@ -111,10 +98,6 @@ pub enum Mirroring {
 	Horizontal,
 	FourScreen
 }
-
-const NES_TAG: [u8; 4] = [0x4e, 0x45, 0x53, 0x1a];
-const PRG_ROM_PAGE_SIZE: usize = 0x4000;
-const CHR_ROM_PAGE_SIZE: usize = 0x2000;
 
 #[derive(Debug)]
 pub struct Rom {
