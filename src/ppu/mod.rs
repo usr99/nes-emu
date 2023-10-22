@@ -39,7 +39,19 @@ impl NesPPU {
 	}
 
 	pub fn write_to_data(&mut self, value: u8) {
+		let addr = self.addr.get();
+		self.increment_vram_addr();
 
+		match addr {
+			0x0000..=0x1fff => self.chr_rom[addr as usize] = value,
+			0x2000..=0x2fff => {
+				let mirrored = self.mirror_vram_addr(addr) as usize;
+				self.vram[mirrored] = value;
+			},
+			0x3000..=0x3eff => panic!("addr space 0x3000..0x3eff is not expected to be used, requested = {} ", addr),
+			0x3f00..=0x3fff => self.palette_table[(addr - 0x3f00) as usize] = value,
+			_				=> panic!("unexpected access to mirrored space {}", addr)
+		}
 	}
 
 	pub fn read_data(&mut self) -> u8 {
