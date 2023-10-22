@@ -1,6 +1,6 @@
 use std::{fs::File, path::Path, io::Read};
 
-use crate::ppu::NesPPU;
+use crate::ppu::{NesPPU, PPURegister};
 
 pub trait Mem {
 	// Required methods
@@ -91,8 +91,9 @@ impl Mem for Bus {
 				let mirror_down_addr = addr & 0b00000111_11111111;
 				self.cpu_vram[mirror_down_addr as usize] = value;
 			},
-			0x2000 => self.ppu.write_to_ctrl(value),
-			0x2006 => self.ppu.write_to_ppu_addr(value),
+			0x2000 => self.ppu.ctrl.update(value),
+			0x2001 => self.ppu.mask.update(value),
+			0x2006 => self.ppu.addr.update(value),
 			0x2007 => self.ppu.write_to_data(value),
 			0x2008..=PPU_REGISTERS_MIRRORS_END => {
 				let _mirror_down_addr = addr & 0b00100000_00000111;

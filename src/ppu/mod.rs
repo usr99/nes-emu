@@ -3,13 +3,14 @@ use bitflags::bitflags;
 use crate::memory::Mirroring;
 
 pub struct NesPPU {
-	pub chr_rom: Vec<u8>,
-	pub palette_table: [u8; 32],
-	pub vram: [u8; 2048],
-	pub oam_data: [u8; 256],
-	pub mirroring: Mirroring,
-	addr: AddressRegister,
-	ctrl: ControlRegister,
+	chr_rom: Vec<u8>,
+	palette_table: [u8; 32],
+	vram: [u8; 2048],
+	oam_data: [u8; 256],
+	mirroring: Mirroring,
+	pub addr: AddressRegister,
+	pub ctrl: ControlRegister,
+	pub mask: MaskRegister,
 	internal_data_buf: u8
 }
 
@@ -20,18 +21,11 @@ impl NesPPU {
 			vram: [0; 2048],
 			oam_data: [0; 64 * 4],
 			palette_table: [0; 32],
-			addr: AddressRegister::new(),
-			ctrl: ControlRegister::new(),
+			addr: AddressRegister { value: (0, 0), hi_ptr: true },
+			ctrl: ControlRegister::empty(),
+			mask: MaskRegister::empty(),
 			internal_data_buf: 0
 		}
-	}
-
-	pub fn write_to_ppu_addr(&mut self, value: u8) {
-		self.addr.update(value);
-	}
-
-	pub fn write_to_ctrl(&mut self, value: u8) {
-		self.ctrl.update(value);
 	}
 
 	fn increment_vram_addr(&mut self) {
@@ -85,16 +79,28 @@ impl NesPPU {
 	}
 }
 
-struct AddressRegister {
+pub trait PPURegister {
+	fn update(&mut self, data: u8);
+}
+
+pub struct AddressRegister {
 	value: (u8, u8),
 	hi_ptr: bool
 }
 
-impl AddressRegister {
-	pub fn new() -> Self {
-		Self { value: (0, 0), hi_ptr: true }
+impl PPURegister for AddressRegister {
+	fn update(&mut self, data: u8) {
+		if self.hi_ptr {
+			self.value.0 = data;
+		} else {
+			self.value.1 = data;
+		}
+		self.apply_mirror();
+		self.hi_ptr = !self.hi_ptr;
 	}
+}
 
+impl AddressRegister {
 	fn apply_mirror(&mut self) {
 		let mut addr = self.get();
 
@@ -103,16 +109,6 @@ impl AddressRegister {
 			self.value.0 = (addr >> 8) as u8;
 			self.value.1 = (addr & 0xFF) as u8;
 		}
-	}
-
-	pub fn update(&mut self, data: u8) {
-		if self.hi_ptr {
-			self.value.0 = data;
-		} else {
-			self.value.1 = data;
-		}
-		self.apply_mirror();
-		self.hi_ptr = !self.hi_ptr;
 	}
 
 	pub fn increment(&mut self, inc: u8) {
@@ -149,11 +145,13 @@ bitflags! {
 	}	
 }
 
-impl ControlRegister {
-	pub fn new() -> Self {
-		Self::from_bits_truncate(0)
+impl PPURegister for ControlRegister {
+	fn update(&mut self, data: u8) {
+		*self = Self::from_bits_truncate(data);
 	}
+}
 
+impl ControlRegister {
 	pub fn vram_addr_increment(&self) -> u8 {
 		if !self.contains(ControlRegister::VRAM_ADD_INCREMENT) {
 			1
@@ -161,8 +159,23 @@ impl ControlRegister {
 			32
 		}
 	}
+}
 
-	pub fn update(&mut self, data: u8) {
+bitflags! {
+	pub struct MaskRegister: u8 {
+		const GREYSCALE_DISPLAY			= 1 << 0;
+		const SHOW_BACKGROUND_LEFTMOST	= 1 << 1;
+		const SHOW_SPRITE_LEFTMOST		= 1 << 2;
+		const SHOW_BACKGROUND			= 1 << 3;
+		const SHOW_SPRITE				= 1 << 4;
+		const EMPHASIZE_RED				= 1 << 5;
+		const EMPHASIZE_GREEN			= 1 << 6;
+		const EMPHASIZE_BLUE			= 1 << 7;
+	}	
+}
+
+impl PPURegister for MaskRegister {
+	fn update(&mut self, data: u8) {
 		*self = Self::from_bits_truncate(data);
 	}
 }
