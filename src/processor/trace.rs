@@ -1,7 +1,7 @@
 use super::{MOS6502, instructions::{Instruction, AddressingMode, Operation}};
 use crate::memory::Mem;
 
-pub fn trace(cpu: &MOS6502) -> String {
+pub fn trace(cpu: &mut MOS6502) -> String {
 	let mut str = format!("{:04X}  ", cpu.reg.pc);
 	
 	let ops = super::instructions::alloc_opcode_map();
@@ -60,7 +60,7 @@ pub fn trace(cpu: &MOS6502) -> String {
 	str
 }
 
-fn format_u8_operand(cpu: &MOS6502, operand: u8, mode: AddressingMode) -> String {
+fn format_u8_operand(cpu: &mut MOS6502, operand: u8, mode: AddressingMode) -> String {
 	match mode {
 		AddressingMode::None => format!("${:04X}", cpu.reg.pc.wrapping_add(operand as i8 as u16).wrapping_add(2)), // "branch if" etc.
 		AddressingMode::Immediate => format!("#${:02X}", operand),
@@ -98,7 +98,7 @@ fn format_u8_operand(cpu: &MOS6502, operand: u8, mode: AddressingMode) -> String
 	}
 }
 
-fn format_u16_operand(cpu: &MOS6502, operand: u16, mode: AddressingMode, op: Operation) -> String {
+fn format_u16_operand(cpu: &mut MOS6502, operand: u16, mode: AddressingMode, op: Operation) -> String {
 	match mode {
 		AddressingMode::Absolute => {
 			match op {

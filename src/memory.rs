@@ -4,11 +4,11 @@ use crate::ppu::NesPPU;
 
 pub trait Mem {
 	// Required methods
-	fn read(&self, addr: u16) -> u8;
+	fn read(&mut self, addr: u16) -> u8;
 	fn write(&mut self, addr: u16, value: u8);
 	
 	// Provided methods
-	fn read_u16(&self, addr: u16) -> u16 {
+	fn read_u16(&mut self, addr: u16) -> u16 {
 		let lo = self.read(addr) as u16;
 		let hi = self.read(addr.wrapping_add(1)) as u16;
 
@@ -20,7 +20,7 @@ pub trait Mem {
 		self.write(addr.wrapping_add(1), (value >> 8) as u8);
 	}
 
-	fn read_u16_page_boundary(&self, addr: u16) -> u16 {
+	fn read_u16_page_boundary(&mut self, addr: u16) -> u16 {
 		let lo = self.read(addr) as u16;
 
 		let addr = (0xFF00 & addr) | (0x00FF & addr.wrapping_add(1));
@@ -56,7 +56,7 @@ impl Bus {
 }
 
 impl Mem for Bus {
-	fn read(&self, mut addr: u16) -> u8 {
+	fn read(&mut self, mut addr: u16) -> u8 {
 		match addr {
 			RAM..= RAM_MIRRORS_END => {
 				let mirror_down_addr = addr & 0b00000111_11111111;

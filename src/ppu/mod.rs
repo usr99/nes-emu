@@ -45,21 +45,16 @@ impl NesPPU {
 	pub fn read_data(&mut self) -> u8 {
 		let addr = self.addr.get();
 		self.increment_vram_addr();
-	
+
 		match addr {
-			0x0000..=0x1fff => {
-				let tmp = self.internal_data_buf;
-				self.internal_data_buf = self.chr_rom[addr as usize];
-				return tmp;
-			},
+			0x0000..=0x1fff => std::mem::replace(&mut self.internal_data_buf, self.chr_rom[addr as usize]),
 			0x2000..=0x2fff => {
-				let tmp = self.internal_data_buf;
-				0
-				// self.internal_data_buf = self.vram[0];
+				let mirrored = self.mirror_vram_addr(addr) as usize;
+				std::mem::replace(&mut self.internal_data_buf, self.vram[mirrored])
 			},
 			0x3000..=0x3eff => panic!("addr space 0x3000..0x3eff is not expected to be used, requested = {} ", addr),
 			0x3f00..=0x3fff => self.palette_table[(addr - 0x3f00) as usize],
-			_ => panic!("unexpected access to mirrored space {}", addr)
+			_				=> panic!("unexpected access to mirrored space {}", addr)
 		}
 	}
 
@@ -112,6 +107,7 @@ impl AddressRegister {
 		let lo = self.value.1;
 		self.value.1 = self.value.1.wrapping_add(inc);
 
+		// add carry
 		if lo > self.value.1 {
 			self.value.0 = self.value.0.wrapping_add(1);
 		}

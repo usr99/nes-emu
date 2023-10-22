@@ -44,7 +44,7 @@ pub struct MOS6502 {
 }
 
 impl Mem for MOS6502 {
-	fn read(&self, addr: u16) -> u8 {
+	fn read(&mut self, addr: u16) -> u8 {
 		self.bus.read(addr)
 	}
 
