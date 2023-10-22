@@ -45,3 +45,5 @@ mod control;
 pub use control::ControlRegister as ControlRegister;
 mod mask;
 pub use mask::MaskRegister as MaskRegister;
+mod status;
+pub use status::StatusRegister as StatusRegister;

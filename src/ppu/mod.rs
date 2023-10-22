@@ -12,6 +12,7 @@ pub struct NesPPU {
 	addr: AddressRegister,
 	ctrl: ControlRegister,
 	mask: MaskRegister,
+	status: StatusRegister,
 	internal_data_buf: u8
 }
 
@@ -25,6 +26,7 @@ impl NesPPU {
 			addr: AddressRegister::default(),
 			ctrl: ControlRegister::default(),
 			mask: MaskRegister::default(),
+			status: StatusRegister::default(),
 			internal_data_buf: 0,
 		}
 	}
@@ -60,6 +62,13 @@ impl NesPPU {
 	pub fn read(&mut self, addr: u16) -> u8 {
 		let register = addr.try_into().unwrap();
 		match register {
+			Register::Status => {
+				let data = self.status.read();
+				self.status.remove(StatusRegister::VERTICAL_BLANK);
+				self.addr.reset_latch();
+
+				data
+			},
 			Register::Data => {
 				let addr = self.addr.get();
 				self.increment_vram_addr();
