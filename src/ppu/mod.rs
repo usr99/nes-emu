@@ -23,10 +23,10 @@ impl NesPPU {
 			vram: [0; 2048],
 			oam_data: [0; 64 * 4],
 			palette_table: [0; 32],
-			addr: AddressRegister::default(),
-			ctrl: ControlRegister::default(),
-			mask: MaskRegister::default(),
-			status: StatusRegister::default(),
+			addr: AddressRegister::new(),
+			ctrl: ControlRegister::empty(),
+			mask: MaskRegister::empty(),
+			status: StatusRegister::empty(),
 			internal_data_buf: 0,
 		}
 	}
@@ -36,11 +36,11 @@ impl NesPPU {
 	}
 
 	pub fn write(&mut self, addr: u16, data: u8) {
-		let register = addr.try_into().unwrap();
-		match register {
-			Register::Control | Register::Mask	=> self.ctrl.write(data),
-			Register::Address					=> self.addr.write(data),
-			Register::Data => {
+		match addr {
+			CONTROL	=> self.ctrl = ControlRegister::from_bits(data).unwrap(),
+			MASK	=> self.mask = MaskRegister::from_bits(data).unwrap(),
+			ADDRESS	=> self.addr.write(data),
+			DATA 	=> {
 				let addr = self.addr.get();
 				self.increment_vram_addr();
 		
@@ -55,21 +55,20 @@ impl NesPPU {
 					_				=> panic!("unexpected access to mirrored space {}", addr)
 				}
 			},
-			_ => unimplemented!("{register:?} does not support write operations")
+			_ => unimplemented!("{addr:04x} does not support write operations")
 		};
 	}
 
 	pub fn read(&mut self, addr: u16) -> u8 {
-		let register = addr.try_into().unwrap();
-		match register {
-			Register::Status => {
-				let data = self.status.read();
+		match addr {
+			STATUS => {
+				let data = self.status.bits();
 				self.status.remove(StatusRegister::VERTICAL_BLANK);
 				self.addr.reset_latch();
 
 				data
 			},
-			Register::Data => {
+			DATA => {
 				let addr = self.addr.get();
 				self.increment_vram_addr();
 		
@@ -84,7 +83,7 @@ impl NesPPU {
 					_				=> panic!("unexpected access to mirrored space {}", addr)
 				}
 			},
-			_ => unimplemented!("{register:?} does not support read operations")
+			_ => unimplemented!("{addr:04x} does not support read operations")
 		}
 	}	
 
