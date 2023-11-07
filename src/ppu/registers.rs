@@ -1,3 +1,5 @@
+use crate::constants::PPU_REGISTERS_MIRRORS_END;
+
 bitflags::bitflags! {
 	pub struct ControlRegister: u8 {
 		const NAMETABLE1				= 1 << 0;
@@ -55,8 +57,8 @@ impl AddressRegister {
 	fn apply_mirror(&mut self) {
 		let mut addr = self.get();
 
-		if addr > 0x3fff {
-			addr &= 0x3fff;
+		if addr > PPU_REGISTERS_MIRRORS_END {
+			addr &= PPU_REGISTERS_MIRRORS_END;
 			self.value.0 = (addr >> 8) as u8;
 			self.value.1 = (addr & 0xFF) as u8;
 		}
