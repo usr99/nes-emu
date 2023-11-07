@@ -2,6 +2,7 @@ pub mod registers;
 
 use registers::*;
 use crate::memory::Mirroring;
+use crate::constants::*;
 
 pub struct NesPPU {
 	chr_rom: Vec<u8>,
@@ -9,9 +10,10 @@ pub struct NesPPU {
 	vram: [u8; 2048],
 	oam_data: [u8; 256],
 	mirroring: Mirroring,
-	addr: AddressRegister,
 	ctrl: ControlRegister,
 	mask: MaskRegister,
+	oam_addr: u8,
+	addr: AddressRegister,
 	status: StatusRegister,
 	internal_data_buf: u8
 }
@@ -23,9 +25,10 @@ impl NesPPU {
 			vram: [0; 2048],
 			oam_data: [0; 64 * 4],
 			palette_table: [0; 32],
-			addr: AddressRegister::new(),
 			ctrl: ControlRegister::empty(),
 			mask: MaskRegister::empty(),
+			oam_addr: 0,
+			addr: AddressRegister::new(),
 			status: StatusRegister::empty(),
 			internal_data_buf: 0,
 		}
@@ -39,6 +42,14 @@ impl NesPPU {
 		match addr {
 			CONTROL	=> self.ctrl = ControlRegister::from_bits(data).unwrap(),
 			MASK	=> self.mask = MaskRegister::from_bits(data).unwrap(),
+			OAMADDR	=> self.oam_addr = data,
+			OAMDATA => {
+				if self.status.contains(StatusRegister::VERTICAL_BLANK)
+				{
+					self.oam_data[self.oam_addr as usize] = data;
+					self.oam_addr = self.oam_addr.wrapping_add(1);
+				}
+			},
 			ADDRESS	=> self.addr.write(data),
 			DATA 	=> {
 				let addr = self.addr.get();
@@ -68,6 +79,7 @@ impl NesPPU {
 
 				data
 			},
+			OAMDATA => self.oam_data[self.oam_addr as usize],
 			DATA => {
 				let addr = self.addr.get();
 				self.increment_vram_addr();
@@ -86,6 +98,10 @@ impl NesPPU {
 			_ => unimplemented!("{addr:04x} does not support read operations")
 		}
 	}	
+
+	pub fn oamdma_transfer(&mut self, page: &[u8]) {
+		self.oam_data.copy_from_slice(page);
+	}
 
 	fn mirror_vram_addr(&self, addr: u16) -> u16 {
 		let mirrored_vram = addr & 0b10111111111111;

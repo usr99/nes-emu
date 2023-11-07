@@ -1,13 +1,3 @@
-pub const CONTROL	: u16 = 0x2000; // write
-pub const MASK		: u16 = 0x2001; // write
-pub const STATUS	: u16 = 0x2002; // read
-pub const OAMADDR	: u16 = 0x2003; // write
-pub const OAMDATA	: u16 = 0x2004; // read / write
-pub const SCROLL	: u16 = 0x2005; // write twice
-pub const ADDRESS	: u16 = 0x2006; // write twice
-pub const DATA		: u16 = 0x2007; // read / write
-pub const OAMDMA	: u16 = 0x4014; // write
-
 bitflags::bitflags! {
 	pub struct ControlRegister: u8 {
 		const NAMETABLE1				= 1 << 0;

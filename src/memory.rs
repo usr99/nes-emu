@@ -86,6 +86,12 @@ impl Mem for Bus {
 				let _mirror_down_addr = addr & 0b00100000_00000111;
 				self.ppu.write(addr, value);
 			},
+			OAMDMA => {
+				/* Writing $XX will upload 256 bytes of data from CPU page $XX00–$XXFF to the internal PPU OAM */
+				let page_start = (value as usize) << 8;
+				let page = &self.cpu_vram[page_start..][..PAGE_SIZE as usize];
+				self.ppu.oamdma_transfer(page);
+			},
 			0x8000..=0xFFFF	=> panic!("Attempt to write to cartridge ROM space"),
 			_				=> println!("Ignoring mem access at {addr}")
 		}		
