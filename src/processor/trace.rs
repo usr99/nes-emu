@@ -12,7 +12,7 @@ pub fn trace(cpu: &mut MOS6502) -> String {
 	}
 
 	match ops.get(&opcode).copied() {
-		Some(Instruction(instr, mode, size)) => {
+		Some(Instruction { op, mode, size, cycles }) => {
 			for i in 0..size {
 				str.push_str(&format!("{:02X} ", cpu.read(cpu.reg.pc + i as u16)));
 			}
@@ -21,12 +21,12 @@ pub fn trace(cpu: &mut MOS6502) -> String {
 				str.push(' ');
 			}
 
-			let instruction_name = match (instr, opcode) {
+			let instruction_name = match (op, opcode) {
 				(Operation::NOP, 0xea) => format!(" NOP "),
 				(Operation::NOP, _) => format!("*NOP "),
 				(Operation::SBC, 0xeb) => format!("*SBC "),
 				(Operation::SBC, _) => format!(" SBC "),
-				_ => format!("{} ", instr)
+				_ => format!("{} ", op)
 			};
 			str.push_str(&instruction_name);
 
@@ -42,7 +42,7 @@ pub fn trace(cpu: &mut MOS6502) -> String {
 				},
 				3 => {
 					let operand = cpu.read_u16(cpu.reg.pc + 1);
-					str.push_str(&format_u16_operand(cpu, operand, mode, instr));
+					str.push_str(&format_u16_operand(cpu, operand, mode, op));
 				},
 				_ => panic!("unknown size {size}")
 			};

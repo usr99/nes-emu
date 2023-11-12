@@ -101,10 +101,10 @@ impl MOS6502 {
 			}
 
 			match ops.get(&opcode).copied() {
-				Some(Instruction(instr, mode, size)) => {
+				Some(Instruction { op, mode, size, cycles }) => {
 					// println!("0x{:x} | 0x{:x}\t{:?}\t{:?}", self.reg.pc - 1, opcode, instr, mode);
 
-					let op_impl = instructions::MOS6502_OP_IMPLS[instr as usize];
+					let op_impl = instructions::MOS6502_OP_IMPLS[op as usize];
 					match op_impl(self, mode) {
 						Some(next_instr) => self.reg.pc = next_instr,
 						None => self.reg.pc += (size - 1) as u16
