@@ -40,13 +40,19 @@ pub trait Mem {
 pub struct Bus {
 	cpu_vram: [u8; 2048],
 	prg_rom: Vec<u8>,
-	ppu: NesPPU
+	ppu: NesPPU,
+	cycles: usize
 }
 
 impl Bus {
 	pub fn new(rom: Rom) -> Self {
 		let ppu = NesPPU::new(rom.chr_rom, Mirroring::Horizontal);
-		Bus { cpu_vram: [0; 2048], prg_rom: rom.prg_rom, ppu }
+		Bus { cpu_vram: [0; 2048], prg_rom: rom.prg_rom, ppu, cycles: 0 }
+	}
+
+	pub fn tick(&mut self, cycles: u8) {
+		self.cycles += cycles as usize;
+		self.ppu.tick(cycles * 3); // PPU ticks are 3 times faster than CPU ticks
 	}
 }
 
@@ -170,7 +176,8 @@ mod test {
 			Self {
 				prg_rom: program.to_vec(),
 				cpu_vram: [0; 2048],
-				ppu: NesPPU::new(vec![], Mirroring::Horizontal)
+				ppu: NesPPU::new(vec![], Mirroring::Horizontal),
+				cycles: 0
 			}
 		}
 	}

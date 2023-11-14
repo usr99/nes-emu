@@ -109,6 +109,8 @@ impl MOS6502 {
 						Some(next_instr) => self.reg.pc = next_instr,
 						None => self.reg.pc += (size - 1) as u16
 					};
+
+					self.bus.tick(cycles);
 				},
 				None => panic!("invalid op code 0x{:x}", opcode)
 			}

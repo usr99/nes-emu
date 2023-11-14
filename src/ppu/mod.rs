@@ -15,7 +15,9 @@ pub struct NesPPU {
 	oam_addr: u8,
 	addr: AddressRegister,
 	status: StatusRegister,
-	internal_data_buf: u8
+	internal_data_buf: u8,
+	scanline: u16,
+	cycles: usize
 }
 
 impl NesPPU {
@@ -31,7 +33,32 @@ impl NesPPU {
 			addr: AddressRegister::new(),
 			status: StatusRegister::empty(),
 			internal_data_buf: 0,
+			scanline: 0,
+			cycles: 0
 		}
+	}
+
+	pub fn tick(&mut self, cycles: u8) -> bool {
+		self.cycles += cycles as usize;
+
+		if self.cycles >= 341 {
+			self.cycles -= 341;
+			self.scanline += 1;
+
+			if self.scanline == 241 {
+				// if self.ctrl.generate_vblank_nmi() {
+					// self.status.insert(StatusRegister::VERTICAL_BLANK);
+					// todo!("trigger NMI interrupt")
+				// }
+			}
+			else if self.scanline >= 262 {
+				self.scanline = 0;
+				self.status.remove(StatusRegister::VERTICAL_BLANK);
+				return true;
+			}
+		}
+
+		false
 	}
 
 	fn increment_vram_addr(&mut self) {
