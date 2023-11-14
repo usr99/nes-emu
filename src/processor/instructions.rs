@@ -863,12 +863,28 @@ fn bitwise_shift_or_rotate<F>(cpu: &mut MOS6502, mode: AddressingMode, op: F)
 	cpu.reg.status.update_zero_and_neg(new);
 }
 
+#[inline]
+fn page_crossed(src: u16, dst: u16) -> bool {
+	/* Returns true if SRC address is on a different page than DST address */
+	src & 0xFF00 != dst & 0xFF00
+}
+
 fn relative_branch(cpu: &mut MOS6502, condition: bool) -> Option<u16> {
 	return match condition {
 		true => {
-			let byte = cpu.read(cpu.reg.pc) as i8;
+			/* Consume one additional CPU cycle when branch succeeds */
+			cpu.bus.tick(1);
 
-			Some(cpu.reg.pc.wrapping_add(byte as u16).wrapping_add(1))
+			/* Compute branch destination address */
+			let offset = cpu.read(cpu.reg.pc) as i8;
+			let jump = cpu.reg.pc.wrapping_add(offset as u16).wrapping_add(1);
+
+			/* +1 cycle again if it jumps to a new page */
+			if page_crossed(cpu.reg.pc, jump) {
+				cpu.bus.tick(1);
+			}
+
+			Some(jump)
 		},
 		false => None
 	};
@@ -883,6 +899,18 @@ fn compare(cpu: &mut MOS6502, reg: u8, addr: u16) {
 	cpu.reg.status.set(StatusFlags::NEGATIVE, result & 0b1000_0000 != 0);
 }
 
+fn get_indexed_addr(cpu: &mut MOS6502, addr: u16, index: u16) -> u16
+{
+	let indexed_addr = addr.wrapping_add(index);
+
+	/* Consumes an additional CPU cycle if to a new page */
+	if page_crossed(addr, indexed_addr) {
+		cpu.bus.tick(1);
+	}
+
+	return indexed_addr;
+}
+
 fn get_operand_addr(cpu: &mut MOS6502, mode: AddressingMode) -> u16 {
 	match mode {
 		AddressingMode::Immediate => cpu.reg.pc,
@@ -890,11 +918,18 @@ fn get_operand_addr(cpu: &mut MOS6502, mode: AddressingMode) -> u16 {
 		AddressingMode::ZeroPageX => (cpu.read(cpu.reg.pc).wrapping_add(cpu.reg.x)) as u16,
 		AddressingMode::ZeroPageY => (cpu.read(cpu.reg.pc).wrapping_add(cpu.reg.y)) as u16,
 		AddressingMode::Absolute => cpu.read_u16(cpu.reg.pc),
-		AddressingMode::AbsoluteX => cpu.read_u16(cpu.reg.pc).wrapping_add(cpu.reg.x as u16),
-		AddressingMode::AbsoluteY => cpu.read_u16(cpu.reg.pc).wrapping_add(cpu.reg.y as u16),
+		AddressingMode::AbsoluteX => {
+			let addr = cpu.read_u16(cpu.reg.pc);
+			get_indexed_addr(cpu, addr, cpu.reg.x as u16)
+		}
+		// cpu.read_u16(cpu.reg.pc).wrapping_add(cpu.reg.x as u16),
+		AddressingMode::AbsoluteY => {
+			let addr = cpu.read_u16(cpu.reg.pc);
+			get_indexed_addr(cpu, addr, cpu.reg.y as u16)
+		}
 		AddressingMode::Indirect => {
 			/*
-				An original 6502 has does not correctly fetch the target address
+				An original 6502 does not correctly fetch the target address
 				if the indirect vector falls on a page boundary (e.g. $xxFF where xx is any value from $00 to $FF).
 				In this case fetches the LSB from $xxFF as expected but takes the MSB from $xx00.
 			 */
@@ -911,8 +946,9 @@ fn get_operand_addr(cpu: &mut MOS6502, mode: AddressingMode) -> u16 {
 			cpu.read_u16_page_boundary(addr)
 		},
 		AddressingMode::IndirectY => {
-			let addr = cpu.read(cpu.reg.pc) as u16;
-			cpu.read_u16_page_boundary(addr).wrapping_add(cpu.reg.y as u16)
+			let mut addr = cpu.read(cpu.reg.pc) as u16;
+			addr = cpu.read_u16_page_boundary(addr);
+			get_indexed_addr(cpu, addr, cpu.reg.y as u16)
 		},
 		AddressingMode::Accumulator | AddressingMode::None => panic!("no operand")
 	}
