@@ -1,8 +1,7 @@
 use std::{collections::HashMap, num::Wrapping, ops::Add, fmt::Display};
 
-use crate::constants::STACK;
 use crate::memory::Mem;
-use super::{MOS6502, StatusFlags};
+use super::{MOS6502, StatusFlags, stack};
 
 #[repr(u8)]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
@@ -477,8 +476,7 @@ fn jmp(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
 
 fn jsr(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
 	let addr = get_operand_addr(cpu, mode);
-	cpu.write_u16(STACK + cpu.reg.sp as u16 - 1, cpu.reg.pc + 1);
-	cpu.reg.sp -= 2;
+	stack::push_u16(cpu, cpu.reg.pc.wrapping_add(1));
 
 	Some(addr)
 }
@@ -529,31 +527,28 @@ fn ora(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
 }
 
 fn pha(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
-	cpu.write(STACK + cpu.reg.sp as u16, cpu.reg.acc);
-	cpu.reg.sp -= 1;
+	stack::push_u8(cpu, cpu.reg.acc);
 
 	None
 }
 
 fn php(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
 	let cpy = cpu.reg.status | StatusFlags::BREAK_COMMAND;
-	cpu.write(STACK + cpu.reg.sp as u16, cpy.bits());
-	cpu.reg.sp -= 1;
+	stack::push_u8(cpu, cpy.bits());
 
 	None
 }
 
 fn pla(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
-	cpu.reg.sp += 1;
-	cpu.reg.acc = cpu.read(STACK + cpu.reg.sp as u16);
+	cpu.reg.acc = stack::pull_u8(cpu);
 	cpu.reg.status.update_zero_and_neg(cpu.reg.acc);
 
 	None
 }
 
 fn plp(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
-	cpu.reg.sp += 1;
-	let byte = cpu.read(STACK + cpu.reg.sp as u16);
+	let byte = stack::pull_u8(cpu);
+	
 	cpu.reg.status = StatusFlags::from_bits(byte).unwrap();
 	cpu.reg.status.remove(StatusFlags::BREAK_COMMAND);
 	cpu.reg.status.insert(StatusFlags::UNUSED);
@@ -584,17 +579,14 @@ fn ror(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
 }
 
 fn rti(cpu: &mut MOS6502, mode: AddressingMode) -> Option<u16> {
-	plp(cpu, mode);
+	plp(cpu, mode); // pull processor status
+	let addr = stack::pull_u16(cpu); // pull return address
 
-	let addr = cpu.read_u16(STACK + cpu.reg.sp as u16 + 1);
-	cpu.reg.sp += 2;
-
-	Some(addr)
+	Some(addr.wrapping_add(1))
 }
 
 fn rts(cpu: &mut MOS6502, _: AddressingMode) -> Option<u16> {
-	let addr = cpu.read_u16(STACK + cpu.reg.sp as u16 + 1);
-	cpu.reg.sp += 2;
+	let addr = stack::pull_u16(cpu); // pull return address
 
 	Some(addr.wrapping_add(1))
 }
@@ -1379,7 +1371,7 @@ mod test {
 		cpu.reg.x = 0x01;
 		cpu.write(0xff, 0x45);
 		cpu.write(0x00, 0x02);
-		cpu.write(STACK, 0x16); // make sure this byte is never read
+		cpu.write(crate::constants::STACK, 0x16); // make sure this byte is never read
 		cpu.write_u16(0x0245, 0xf0);
 		cpu.run();
 		assert_eq!(cpu.reg.acc, 0xff);

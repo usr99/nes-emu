@@ -1,5 +1,6 @@
 use bitflags::bitflags;
 
+mod stack;
 mod instructions;
 pub mod trace;
 use crate::memory::{Mem, Bus, Rom};
